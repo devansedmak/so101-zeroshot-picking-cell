@@ -1,0 +1,32 @@
+[project]
+name = "zeroshot-picking-cell"
+version = "0.1.0"
+description = "Order-driven zero-shot picking cell on SO-101 with Cyberwave (Cyberwave Builders Program Cohort 2)"
+authors = [{ name = "Devan Sedmak" }]
+requires-python = ">=3.10"
+dependencies = [
+    "cyberwave[camera]",
+    "numpy",
+    "opencv-python",
+    "python-dotenv",
+]
+
+[project.optional-dependencies]
+perception = [
+    # heavier deps, installed once the robot is paired (Week 2/3)
+    "transformers",
+    "torch",
+    # GroundingDINO: install per upstream instructions (not on PyPI as a clean wheel)
+]
+service = ["fastapi", "uvicorn", "httpx"]
+dev = ["pytest", "ruff", "black"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.black]
+line-length = 100
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

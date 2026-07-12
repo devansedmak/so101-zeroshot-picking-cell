@@ -1,0 +1,27 @@
+# secrets
+.env
+
+# python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# editor
+.vscode/
+.idea/
+
+# data and artifacts
+*.mp4
+*.avi
+*.jpg
+*.jpeg
+*.png
+*.bmp
+*.webp
+*.jsonl
+frames/
+captures/
+datasets/
