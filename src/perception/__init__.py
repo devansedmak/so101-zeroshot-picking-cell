@@ -12,11 +12,14 @@ from .detect import (
     parse_detections,
     pick_target,
 )
+from .homography import Homography, ReprojectionError
 
 __all__ = [
     "TASK_BOXES",
     "TASK_POINTS",
     "Detection",
+    "Homography",
+    "ReprojectionError",
     "detect",
     "parse_detections",
     "pick_target",

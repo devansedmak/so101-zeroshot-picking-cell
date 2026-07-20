@@ -28,8 +28,10 @@ Install if needed: `sudo apt-get install v4l-utils`. (The driver container alrea
 2. Set up real streaming to the twin (do NOT do before mount + uncap):
    `cyberwave camera -c <index> -t 056c8c62-9368-4ae9-b582-ca3998f1cf90 -e 9821dd80-9596-4eee-a572-254b254e7ab0`
    (clones a `cyberwave-edge-python` streamer project; `-c` is the camera index, `-f` fps).
-3. Calibrate **camera→table homography** (checkerboard); save `homography.npz` + notes.
-   Ship bar: reprojection error < 2 cm (checkpoint criterion).
+3. Calibrate **camera→table homography**: click ≥4 known table points in one overhead
+   frame → `Homography.fit(pixel_pts, world_pts_mm)` → `.save("hardware/config/homography.json")`
+   (code ready: [src/perception/homography.py](../../src/perception/homography.py), DLT+Hartley,
+   git-friendly **JSON** not `.npz`). Ship bar: `reprojection_error(...).within(20.0)` (< 2 cm).
 
 The dashboard "Overhead Camera" live view currently shows the **virtual/sim render**
 (twin mesh from above), not the real feed — real feed appears after step 2.
