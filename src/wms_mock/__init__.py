@@ -1,1 +1,5 @@
-"""Mock WMS: minimal script/FastAPI posting orders like {\"item\": \"red cube\", \"bin\": \"A\"}."""
+"""Mock WMS: in-process order source posting orders like {"item": "red marker", "bin": "A"}."""
+
+from .orders import DEMO_ORDERS, Order, OrderSource
+
+__all__ = ["DEMO_ORDERS", "Order", "OrderSource"]

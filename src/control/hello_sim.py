@@ -21,9 +21,9 @@ from __future__ import annotations
 import argparse
 import os
 import sys
-import time
 
-from .motion import JOINTS, MotionExecutor, MotionPlan
+from .motion import MotionExecutor, MotionPlan
+from .sim_session import load_env, open_sim_executor
 
 # A gentle, obviously-visible demo: pan the base, nod the shoulder, wave, home.
 # Every angle is well inside DEFAULT_JOINT_LIMITS; the executor clamps anyway.
@@ -41,16 +41,6 @@ DEMO_PLAN = MotionPlan.from_dict(
         ],
     }
 )
-
-
-def _load_env() -> None:
-    """Best-effort load of .env (python-dotenv is a project dependency)."""
-    try:
-        from dotenv import load_dotenv
-
-        load_dotenv()
-    except ImportError:
-        pass  # rely on the ambient environment
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -74,7 +64,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    _load_env()
+    load_env()
 
     if args.dry_run:
         # No network, no SDK: exercise the executor against a no-op robot.
@@ -94,42 +84,9 @@ def main(argv: list[str] | None = None) -> int:
         print("ERROR: CYBERWAVE_TWIN_ID is not set (see .env).", file=sys.stderr)
         return 2
 
-    # Imported here so --dry-run needs neither the SDK nor credentials.
-    from cyberwave import Cyberwave
-
-    cw = Cyberwave()
-    cw.affect("simulation")  # pin runtime to SIM — do not remove without a confirmed live plan
-    print(f"[hello_sim] runtime = simulation; fetching twin {twin_id} …")
-
-    robot = cw.twin(twin_id=twin_id)
-    print(f"[hello_sim] twin ready: {getattr(robot, 'name', twin_id)}")
-
-    # Map our canonical joint keys ("1".."6") → this twin's actual SDK joint names.
-    # Some SO-101 assets expose "_1".."_6"; discover and align by sorted order.
-    name_map: dict[str, str] = {}
-    try:
-        from cyberwave.twin.capabilities import controllable_joint_names
-
-        actual = controllable_joint_names(robot)
-        if len(actual) == len(JOINTS):
-            name_map = dict(zip(JOINTS, actual))
-            print(f"[hello_sim] joint map: {name_map}")
-    except Exception as e:  # noqa: BLE001 — discovery is best-effort; fall back to identity
-        print(f"[hello_sim] joint-name discovery skipped ({e}); using canonical names")
+    # Connect + warm up via the shared sim path (see control.sim_session).
+    executor, _robot = open_sim_executor(twin_id, settle=args.settle)
     print()
-
-    executor = MotionExecutor(robot, name_map=name_map)
-
-    # Warm-up: the first joint command auto-attaches the controller and can be
-    # dropped while it initializes. Send one throwaway home, then let it settle so
-    # the real plan lands cleanly.
-    if args.settle > 0:
-        print(f"[hello_sim] warming up controller ({args.settle:.0f}s settle) …")
-        try:
-            executor._snap_to({j: 0.0 for j in JOINTS})
-        except Exception as e:  # noqa: BLE001 — first command may be lost by design
-            print(f"[hello_sim] warm-up command note: {e}")
-        time.sleep(args.settle)
 
     if args.hold:
         hold_plan = MotionPlan.from_dict(
