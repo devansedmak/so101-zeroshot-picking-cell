@@ -6,7 +6,7 @@ visual verification (decisions.md D9). For now ``fulfill_order`` runs hardcoded 
 
 from .alerts import build_fulfilled_alert, send_alert
 from .loop import Fulfillment, fulfill_order
-from .poses import UnknownBin, UnknownItem, pick_plan, place_plan
+from .poses import UnknownBin, UnknownItem, pick_plan, pick_plan_from_table, place_plan
 
 __all__ = [
     "Fulfillment",
@@ -15,6 +15,7 @@ __all__ = [
     "build_fulfilled_alert",
     "fulfill_order",
     "pick_plan",
+    "pick_plan_from_table",
     "place_plan",
     "send_alert",
 ]

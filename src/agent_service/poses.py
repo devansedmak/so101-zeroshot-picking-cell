@@ -10,11 +10,16 @@ surveyed location (roadmap.md / decisions.md D9). Do not tune these for accuracy
 
 Poses are dicts of canonical joint key ("1".."6") → angle°, consumed by
 control.MotionExecutor (which clamps every value again at the SDK boundary).
+
+``pick_plan_from_table`` is the camera-gated successor to the hardcoded ``PICK_POSES``:
+it takes a table (X, Y) mm (from detect→homography) and solves IK for the pose. Once
+the overhead camera + real homography calibration are live, ``PICK_POSES`` /
+``pick_plan`` become obsolete and this becomes the only pick path.
 """
 
 from __future__ import annotations
 
-from src.control import MotionPlan
+from src.control import MotionPlan, solve_ik
 
 # Gripper (joint "6") symbolic open/close angles, well inside DEFAULT_JOINT_LIMITS.
 GRIPPER_OPEN = -40.0
@@ -53,6 +58,26 @@ def pick_plan(item: str) -> MotionPlan:
             "actions": [
                 {"type": "home", "duration": 1.0},
                 {"type": "set_pose", "pose": pose, "duration": 1.5},
+                {"type": "set_joint", "joint": "6", "angle": GRIPPER_CLOSE, "duration": 0.6},
+            ],
+        }
+    )
+
+
+def pick_plan_from_table(x_mm: float, y_mm: float) -> MotionPlan:
+    """IK-driven pick at a table (X, Y) mm — the camera-gated successor to ``pick_plan``.
+
+    Solves IK for the target (gripper vertical, open) then closes to grasp; same
+    shape as ``pick_plan`` but the pose comes from detect→homography→IK rather than
+    a hardcoded lookup. Raises ``control.Unreachable`` if the target is out of reach.
+    """
+    joints = solve_ik(x_mm, y_mm)
+    return MotionPlan.from_dict(
+        {
+            "say": f"picking at table ({x_mm:.0f}, {y_mm:.0f}) mm",
+            "actions": [
+                {"type": "home", "duration": 1.0},
+                {"type": "set_pose", "pose": joints, "duration": 1.5},
                 {"type": "set_joint", "joint": "6", "angle": GRIPPER_CLOSE, "duration": 0.6},
             ],
         }
