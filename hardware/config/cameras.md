@@ -90,7 +90,8 @@ adding 2 extra spread-out points (`--points`) usually fixes a marginal fit.
 ```bash
 .venv/bin/python tools/pick_bin_regions.py --image /tmp/calib.jpg
 ```
-Click **2 opposite corners per bin**, bins in order **A, B, C** (6 clicks), just *inside* each
+Click **2 opposite corners per bin**, bins in order **A, B** (4 clicks — bin C has no taught place
+pose, see [demo-scenario.md](../../docs/demo-scenario.md); add `C` only if you teach one), just *inside* each
 rim — a box slightly smaller than the bin mouth is safer than one that spills onto the table.
 → expect `saved → hardware/config/bin-regions.json` and `round-trip OK via load_bin_regions()`.
 Keyboard-only path: `--regions "A=x0,y0,x1,y1" "B=..." "C=..." --frame-size W,H`.
