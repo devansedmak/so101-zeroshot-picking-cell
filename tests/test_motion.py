@@ -46,9 +46,14 @@ def test_clamp_within_bounds_is_unchanged():
 
 
 def test_clamp_squeezes_out_of_range():
-    assert clamp("1", 9999) == 90  # joint 1 upper bound
-    assert clamp("1", -9999) == -90
-    assert clamp("2", 9999) == 60  # narrower non-base joint
+    # Assert against the constant, not a copy of it: the limits are derived from the twin's
+    # own calibration (hardware/config/joint-ranges.md) and are expected to change if the
+    # arm is ever re-calibrated. What must hold is that clamping lands exactly on the bound.
+    for joint, (lo, hi) in DEFAULT_JOINT_LIMITS.items():
+        assert clamp(joint, 9999) == hi
+        assert clamp(joint, -9999) == lo
+    # and the base really is the widest sweep
+    assert DEFAULT_JOINT_LIMITS["1"][1] > DEFAULT_JOINT_LIMITS["2"][1]
 
 
 def test_clamp_unknown_joint_uses_conservative_default():
@@ -154,7 +159,8 @@ def test_out_of_range_angle_is_clamped_before_sdk_call():
     for name, pos, _ in robot.joints.calls:
         lo, hi = DEFAULT_JOINT_LIMITS[name]
         assert lo <= pos <= hi
-    assert _positions_for(robot, "1")[-1] == pytest.approx(90)  # ends exactly at the limit
+    # ends exactly at joint 1's upper limit, whatever the calibration says it is
+    assert _positions_for(robot, "1")[-1] == pytest.approx(DEFAULT_JOINT_LIMITS["1"][1])
 
 
 def test_ramp_step_count_and_monotonic_arrival():

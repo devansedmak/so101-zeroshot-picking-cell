@@ -3,14 +3,24 @@
 Proves the composed pipeline the loop was missing — VLM output → pixel → table
 homography → IK → executable MotionPlan — without a camera, robot, or network.
 Nothing here calls the SDK; the VLM output and the homography are hand-built.
+
+The second half of this file drives the **real runnable entrypoint**
+(``run_order.main``), because the first half passing while the loop still picked from
+the hardcoded pose table is exactly the gap that made the headline claim unproven.
+It asserts the ``--perceive`` resolution order: calibration present ⇒ the IK path,
+calibration/detection missing ⇒ the hardcoded path **with a warning**, and an unknown
+item ⇒ a recorded failed outcome rather than an exception.
 Run with PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 (see runbook).
 """
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
-from src.agent_service.poses import pick_plan_from_table
+from src.agent_service import run_order
+from src.agent_service.poses import PICK_POSES, pick_plan_from_table
 from src.control import validate_plan
 from src.perception import Homography, parse_detections, pick_target
 
@@ -19,6 +29,17 @@ from src.perception import Homography, parse_detections, pick_target
 IMG_W, IMG_H = 640, 480
 _PIXELS = [(0, 0), (640, 0), (640, 480), (0, 480)]
 _TABLE_MM = [(100, -100), (200, -100), (200, 100), (100, 100)]
+
+# One canned VLM answer: [y, x] on the 0..1000 grid ⇒ px (480, 120) ⇒ table (175, -50) mm
+# under the calibration above (see tests/test_locate.py for the independent arithmetic).
+_CANNED = [{"point": [250, 750], "label": "red marker"}]
+_PERCEIVED_SAY = "picking at table (175, -50) mm"
+
+
+@pytest.fixture(autouse=True)
+def _no_sleep(monkeypatch):
+    """Ramping is instantaneous so the entrypoint tests don't wait on wall-clock time."""
+    monkeypatch.setattr("src.control.motion.time.sleep", lambda _s: None)
 
 
 def test_detect_to_homography_to_ik_yields_a_valid_plan():
@@ -50,3 +71,128 @@ def test_seam_holds_across_the_calibrated_patch():
         )
         tx, ty = homography.project((det[0].x, det[0].y))
         assert validate_plan(pick_plan_from_table(tx, ty)) == []
+
+
+# --- the seam through the REAL entrypoint: run_order --perceive ----------
+
+
+def _offline_perceive_argv(tmp_path, *, calibrated: bool, detections=_CANNED, item="red marker"):
+    """``--perceive`` argv that is guaranteed offline: canned VLM output, saved frame.
+
+    No camera (``--frame``), no VLM call (``--detections`` ⇒ the canned client), no
+    connection (dry-run is the default), and no image decode (``--frame-size``).
+    """
+    frame = tmp_path / "frame.jpg"
+    frame.write_bytes(b"")  # never opened: --frame-size makes the size explicit
+    dets = tmp_path / "dets.json"
+    dets.write_text(json.dumps(detections))
+    calib = tmp_path / "homography.json"
+    if calibrated:
+        Homography.fit(_PIXELS, _TABLE_MM).save(calib, units="mm")
+    return [
+        "--item", item, "--bin", "A", "--perceive",
+        "--homography", str(calib),
+        "--frame", str(frame),
+        "--frame-size", f"{IMG_W}x{IMG_H}",
+        "--detections", str(dets),
+    ]
+
+
+def test_perceive_picks_the_ik_path_when_a_calibration_is_present(tmp_path, capsys):
+    rc = run_order.main(_offline_perceive_argv(tmp_path, calibrated=True))
+    out = capsys.readouterr().out
+
+    assert rc == 0
+    assert "perceived picking enabled" in out
+    assert "'red marker' at px=(480, 120) → table (175, -50) mm" in out
+    assert _PERCEIVED_SAY in out  # the plan came from IK, not from PICK_POSES
+    assert "picking red marker" not in out
+    assert "✅ fulfilled: red marker → bin A" in out
+
+
+def test_perceive_falls_back_to_hardcoded_when_uncalibrated(tmp_path, capsys):
+    rc = run_order.main(_offline_perceive_argv(tmp_path, calibrated=False))
+    out = capsys.readouterr().out
+
+    assert rc == 0
+    assert "⚠ perceived picking disabled" in out  # says WHY: no calibration file
+    assert "homography.json" in out
+    assert "picking red marker" in out  # the hardcoded plan ran instead
+    assert _PERCEIVED_SAY not in out
+    assert "✅ fulfilled: red marker → bin A" in out
+
+
+def test_perceive_falls_back_when_the_item_is_not_detected(tmp_path, capsys):
+    rc = run_order.main(_offline_perceive_argv(tmp_path, calibrated=True, detections=[]))
+    out = capsys.readouterr().out
+
+    assert rc == 0
+    assert "⚠ perceived pick unavailable: ItemNotFound" in out
+    assert "picking red marker" in out and _PERCEIVED_SAY not in out
+    assert "✅ fulfilled" in out
+
+
+def test_perceive_fulfils_an_item_that_has_no_hardcoded_pose(tmp_path, capsys):
+    """The zero-shot payoff: an item absent from PICK_POSES is still pickable."""
+    assert "stapler" not in PICK_POSES
+    canned = [{"point": [250, 750], "label": "stapler"}]
+    rc = run_order.main(
+        _offline_perceive_argv(tmp_path, calibrated=True, detections=canned, item="stapler")
+    )
+    out = capsys.readouterr().out
+
+    assert rc == 0
+    assert _PERCEIVED_SAY in out
+    assert "✅ fulfilled: stapler → bin A" in out
+
+
+def test_perceive_undetected_and_unhardcoded_fails_the_order_without_raising(tmp_path, capsys):
+    assert "ghost" not in PICK_POSES  # nothing to fall back to
+    rc = run_order.main(
+        _offline_perceive_argv(tmp_path, calibrated=True, detections=[], item="ghost")
+    )
+    out = capsys.readouterr().out
+
+    assert rc == 1  # a recorded failure, not a traceback
+    assert "⚠ perceived pick unavailable: ItemNotFound" in out
+    assert "❌ failed: ghost → bin A" in out and "UnknownItem" in out
+
+
+def test_fulfill_order_records_which_pick_path_it_took():
+    """The loop's own contract: provenance is recorded, the default stays hardcoded."""
+    from src.agent_service import fulfill_order, pick_choice_from_table
+    from src.control import MotionExecutor
+    from src.wms_mock import Order
+
+    class _Null:
+        class joints:  # noqa: N801 — duck-type for MotionExecutor
+            @staticmethod
+            def set(*a, **k):
+                return None
+
+    order = Order("red marker", "A")
+    ex = MotionExecutor(_Null(), dry_run=True)
+
+    default = fulfill_order(order, ex, dry_run_alert=True)
+    assert default.ok and default.pick_source == "hardcoded"
+    assert default.pick_target_mm is None and not default.perceived
+
+    perceived = fulfill_order(
+        order,
+        ex,
+        dry_run_alert=True,
+        resolve_pick=lambda o: pick_choice_from_table(175.0, -50.0),
+    )
+    assert perceived.ok and perceived.perceived
+    assert perceived.pick_target_mm == (175.0, -50.0)
+
+
+def test_default_run_is_untouched_by_the_new_seam(capsys):
+    """No --perceive ⇒ byte-for-byte the old behaviour: hardcoded poses, no warnings."""
+    rc = run_order.main(["--item", "red marker", "--bin", "A"])
+    out = capsys.readouterr().out
+
+    assert rc == 0
+    assert "picking red marker" in out
+    assert "perceive" not in out and "⚠" not in out
+

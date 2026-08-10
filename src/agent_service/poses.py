@@ -15,9 +15,16 @@ control.MotionExecutor (which clamps every value again at the SDK boundary).
 it takes a table (X, Y) mm (from detect→homography) and solves IK for the pose. Once
 the overhead camera + real homography calibration are live, ``PICK_POSES`` /
 ``pick_plan`` become obsolete and this becomes the only pick path.
+
+:class:`PickChoice` is the seam the loop resolves a pick through: it carries the plan
+*plus where it came from* ("hardcoded" vs "perceived"), so a run can prove which path it
+actually took — the point of ``run_order --perceive`` (see run_order._perceiving_resolver).
 """
 
 from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any
 
 from src.control import MotionPlan, solve_ik
 
@@ -81,6 +88,62 @@ def pick_plan_from_table(x_mm: float, y_mm: float) -> MotionPlan:
                 {"type": "set_joint", "joint": "6", "angle": GRIPPER_CLOSE, "duration": 0.6},
             ],
         }
+    )
+
+
+# ------------------------------------------------------- the pick-target seam
+HARDCODED = "hardcoded"
+PERCEIVED = "perceived"
+
+
+@dataclass(frozen=True)
+class PickChoice:
+    """A pick plan **plus its provenance** — what the loop records about the grasp.
+
+    ``source`` is :data:`HARDCODED` (the throwaway pose table) or :data:`PERCEIVED`
+    (VLM → homography → IK). The extra fields are only set on the perceived path and
+    exist for logs/alerts/demo narration, not for control.
+    """
+
+    plan: MotionPlan
+    source: str = HARDCODED
+    table_mm: tuple[float, float] | None = None
+    pixel: tuple[float, float] | None = None
+    frame: str | None = None
+
+    @property
+    def perceived(self) -> bool:
+        return self.source == PERCEIVED
+
+    def to_dict(self) -> dict[str, Any]:
+        """JSON-safe provenance (no MotionPlan — that's the executor's business)."""
+        return {
+            "source": self.source,
+            "table_mm": list(self.table_mm) if self.table_mm else None,
+            "pixel": list(self.pixel) if self.pixel else None,
+            "frame": self.frame,
+        }
+
+
+def pick_choice(item: str) -> PickChoice:
+    """The default (unchanged) pick: hardcoded pose table. Raises ``UnknownItem``."""
+    return PickChoice(pick_plan(item), HARDCODED)
+
+
+def pick_choice_from_table(
+    x_mm: float,
+    y_mm: float,
+    *,
+    pixel: tuple[float, float] | None = None,
+    frame: str | None = None,
+) -> PickChoice:
+    """The perceived pick: IK at a detected table (X, Y) mm. Raises ``Unreachable``."""
+    return PickChoice(
+        pick_plan_from_table(x_mm, y_mm),
+        PERCEIVED,
+        table_mm=(float(x_mm), float(y_mm)),
+        pixel=pixel,
+        frame=frame,
     )
 
 

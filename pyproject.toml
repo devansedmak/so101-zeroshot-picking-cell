@@ -8,17 +8,16 @@ dependencies = [
     "cyberwave[camera]",
     "numpy",
     "opencv-python",
+    "pillow",          # the SDK's mlmodels.run image path imports PIL lazily — missing it
+                       # fails ONLY on the real VLM call, i.e. exactly during a live demo
     "python-dotenv",
 ]
 
 [project.optional-dependencies]
-perception = [
-    # heavier deps, installed once the robot is paired (Week 2/3)
-    "transformers",
-    "torch",
-    # GroundingDINO: install per upstream instructions (not on PyPI as a clean wheel)
-]
-service = ["fastapi", "uvicorn", "httpx"]
+# NOTE: the local BERT-NER + GroundingDINO stack (transformers/torch) was dropped as the
+# primary perception path in favour of the Cyberwave-hosted VLM (D10/D13), and the VLA
+# training fallback is dead (D18) — so neither is a dependency of anything we ship.
+# Order intake is deliberately stdlib http.server, not FastAPI (D16).
 dev = ["pytest", "ruff", "black"]
 
 [tool.ruff]

@@ -17,6 +17,13 @@ with an ``ok`` flag (perception.verify.VerifyResult satisfies it). This module t
 imports NO network/camera code — with ``verify=None`` the loop behaves exactly like the
 walking skeleton it grew from, which keeps the perception-free entrypoints/tests valid.
 
+**Where the pick comes from is injected the same way**: ``resolve_pick`` is any callable
+``(order) -> poses.PickChoice``. ``None`` ⇒ the hardcoded pose table, i.e. today's exact
+behaviour; ``run_order --perceive`` passes a resolver that asks perception where the item
+really is (VLM → homography → IK) and *falls back to the hardcoded pose with a warning*
+when the calibration or the detection isn't there. Injection is what keeps this module
+camera-free and lets the degradation policy live in one obvious place (run_order).
+
 Pure + duck-typed: works with control.MotionExecutor's ``dry_run`` and any robot
 exposing ``joints.set`` / ``alerts.create`` — so it unit-tests with a fake robot.
 """
@@ -30,7 +37,7 @@ from src.control import MotionExecutor
 from src.wms_mock import Order
 
 from .alerts import build_failed_alert, build_fulfilled_alert, send_alert
-from .poses import pick_plan, place_plan
+from .poses import HARDCODED, PickChoice, pick_choice, place_plan
 
 # Pick+place is attempted at most twice before we give up and alert (demo-scenario §5).
 MAX_ATTEMPTS = 2
@@ -46,6 +53,11 @@ class VerifyOutcome(Protocol):
 # ``functools.partial(verify_placement, client, ...)`` all work without a base class.
 Verifier = Callable[[Order], Any]
 
+# ``resolve_pick(order) -> PickChoice`` (a bare MotionPlan is accepted too — see
+# ``_as_choice``). Its contract: it must NOT raise for a recoverable perception problem;
+# degrading to the hardcoded pose is the resolver's job, not the loop's.
+PickResolver = Callable[[Order], Any]
+
 
 @dataclass
 class Fulfillment:
@@ -58,10 +70,17 @@ class Fulfillment:
     stages: list[str] = field(default_factory=list)
     attempts: int = 0  # pick+place attempts actually executed
     verification: dict[str, Any] | None = None  # last verdict, JSON-safe (for logs/alerts)
+    pick_source: str = HARDCODED  # "hardcoded" | "perceived" — which pick path ran
+    pick_target_mm: tuple[float, float] | None = None  # perceived table coord, if any
 
     @property
     def ok(self) -> bool:
         return self.status == "fulfilled"
+
+    @property
+    def perceived(self) -> bool:
+        """Did this run pick where perception said, rather than from the pose table?"""
+        return self.pick_source == "perceived"
 
 
 def _verdict(verify: Verifier, order: Order) -> tuple[bool, str, dict[str, Any] | None]:
@@ -82,6 +101,11 @@ def _verdict(verify: Verifier, order: Order) -> tuple[bool, str, dict[str, Any] 
     return ok, reason, payload
 
 
+def _as_choice(resolved: Any) -> PickChoice:  # noqa: ANN401 — duck-typed on purpose
+    """Normalize a resolver's answer to a :class:`PickChoice` (bare plans allowed)."""
+    return resolved if isinstance(resolved, PickChoice) else PickChoice(resolved)
+
+
 def fulfill_order(
     order: Order,
     executor: MotionExecutor,
@@ -89,6 +113,7 @@ def fulfill_order(
     robot: Any = None,
     dry_run_alert: bool = False,
     verify: Verifier | None = None,
+    resolve_pick: PickResolver | None = None,
     max_attempts: int = MAX_ATTEMPTS,
 ) -> Fulfillment:
     """Run one order end-to-end: pick → place → (verify) → alert.
@@ -103,15 +128,24 @@ def fulfill_order(
     Failed verification retries pick+place up to ``max_attempts`` times, then returns
     ``status="failed"`` and dispatches an ERROR alert.
 
+    ``resolve_pick`` decides *where* to pick: ``(order) -> PickChoice``. ``None`` ⇒ the
+    hardcoded pose table (unchanged default). The chosen path is recorded on the result
+    as ``pick_source`` / ``pick_target_mm``.
+
     Never raises: unknown item/bin, motion errors and verification errors all come back
     as a ``failed`` :class:`Fulfillment`, so a batch loop keeps going.
     """
     result = Fulfillment(order=order, status="fulfilled")
     try:
-        pick = pick_plan(order.item)
-        place = place_plan(order.bin)
-
         print(f"▶ order: pick {order.item!r} → bin {order.bin!r}")
+        # Resolve the pick target BEFORE any motion (so does place) — a planning error
+        # must never leave the arm half-way through an order.
+        choice = _as_choice(resolve_pick(order)) if resolve_pick else pick_choice(order.item)
+        pick = choice.plan
+        place = place_plan(order.bin)
+        result.pick_source = choice.source
+        result.pick_target_mm = choice.table_mm
+
         attempts = 1 if verify is None else max(1, max_attempts)
         verified = verify is None  # no verifier ⇒ nothing to prove
         reason = ""

@@ -4,6 +4,8 @@ plus the closed-loop placement verification that gates fulfillment (D9 thesis).
 Primary path is the Cyberwave-hosted VLM (Gemini Robotics-ER) via ``detect`` (D10/D13);
 BERT-NER + GroundingDINO remain an offline fallback (reference/old-pickplace.md).
 ``verify_placement`` reuses the same ``detect_points`` call to answer "is it in the bin?".
+``locate_item`` is the composition the loop consumes: capture → detect → homography →
+table (X, Y) mm, i.e. the pick target the IK path needs (see locate.py for why).
 """
 
 from .detect import (
@@ -15,6 +17,16 @@ from .detect import (
     pick_target,
 )
 from .homography import Homography, ReprojectionError
+from .locate import (
+    DEFAULT_HOMOGRAPHY_PATH,
+    FrameSizeUnknown,
+    HomographyMissing,
+    ItemNotFound,
+    LocatedItem,
+    LocateError,
+    load_homography,
+    locate_item,
+)
 from .verify import (
     DEFAULT_BIN_REGIONS_PATH,
     BinRegion,
@@ -30,12 +42,18 @@ from .verify import (
 
 __all__ = [
     "DEFAULT_BIN_REGIONS_PATH",
+    "DEFAULT_HOMOGRAPHY_PATH",
     "TASK_BOXES",
     "TASK_POINTS",
     "BinRegion",
     "BinRegionsMissing",
     "Detection",
+    "FrameSizeUnknown",
     "Homography",
+    "HomographyMissing",
+    "ItemNotFound",
+    "LocateError",
+    "LocatedItem",
     "ReprojectionError",
     "UnknownBinRegion",
     "VerifyResult",
@@ -43,6 +61,8 @@ __all__ = [
     "detect",
     "evaluate_placement",
     "load_bin_regions",
+    "load_homography",
+    "locate_item",
     "parse_detections",
     "pick_target",
     "save_bin_regions",

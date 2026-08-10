@@ -43,17 +43,30 @@ JOINT_LABELS: dict[str, str] = {
     "6": "gripper",
 }
 
-# Conservative degree limits (see module docstring). Base gets a wider sweep;
-# every other joint is kept narrow enough that a worst-case plan can't bash the
-# arm into the table or itself. wrist_roll (5) is kept small on purpose — its
-# zero sits near the encoder 0↔4095 seam (see hardware/config/calibration-notes.md).
+# Degree limits, derived 2026-08-10 from OUR twin's own guided calibration
+# (`joint_calibration.follower` on twin aa1dd0ad-…), keeping a ~5° margin inside the
+# measured mechanical stops. Full table + provenance: hardware/config/joint-ranges.md.
+#
+# These were hand-guessed (±60° everywhere) until a perceived pick in the middle of the
+# table solved to elbow = -83° and got silently clamped to -60°, landing the tip short of
+# the object. The arm reaches ±96.6° there; only our guess said otherwise. Clamping is
+# still always on — it just no longer clamps away real, calibrated reach.
+#
+# wrist_roll (5) stays deliberately narrow at ±60° despite a measured ±179.5°: its zero sits
+# near the encoder 0↔4095 seam and it wrapped during calibration (calibration-notes.md), and
+# a top-down pick never needs roll.
+#
+# ⚠ gripper (6) is INTENTIONALLY left at the old guess. The follower's calibrated gripper
+# span is 0°→128.9°, so poses.py's "open = -40°" is outside it — but whether the driver
+# applies its own sign/offset is unverified, and guessing wrong could command a CLOSE when we
+# mean OPEN. Verify on hardware first: hardware/config/joint-ranges.md §gripper convention.
 DEFAULT_JOINT_LIMITS: dict[str, tuple[float, float]] = {
-    "1": (-90, 90),
-    "2": (-60, 60),
-    "3": (-60, 60),
-    "4": (-60, 60),
-    "5": (-60, 60),
-    "6": (-60, 60),
+    "1": (-113, 113),  # measured ±118.9
+    "2": (-97, 97),    # measured ±102.8
+    "3": (-91, 91),    # measured ±96.6
+    "4": (-96, 96),    # measured ±101.6
+    "5": (-60, 60),    # measured ±179.5 — narrowed on purpose (encoder seam)
+    "6": (-60, 60),    # ⚠ unverified convention, see above
 }
 
 MAX_DURATION_S: float = 5.0
