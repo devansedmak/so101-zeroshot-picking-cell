@@ -300,7 +300,7 @@ Offered constructively — Cyberwave explicitly asked for it, and every item bel
    fallback paths. *Suggestion:* document the one-shot `get_frame` path as the recommended perception
    entrypoint for agents, and expose stream health in the UI instead of letting it fail silently.
 3. **Credit cost per model call was never discoverable**, so we self-censored. Builder credits are
-   100 (50 + 50) but only 50 were visible in the account, and no per-call cost is published for
+   50 on signup (a "100 = 50 + 50" figure was mentioned verbally but never in writing), and no per-call cost is published for
    `cw.mlmodels.run` on Gemini Robotics-ER. Playground testing being free (0 credits) was genuinely
    great and is what let us validate the model on real photos. But since we could not predict what a
    scripted loop would cost, **we never spent a single real API detection call** and instead validated the

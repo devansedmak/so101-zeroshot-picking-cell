@@ -141,6 +141,10 @@ def _live_verifier(
         if cw is None:
             from cyberwave import Cyberwave  # lazy: no credentials needed for dry-run
 
+            from src.control.sim_session import load_env as _load_env
+
+            _load_env()  # cheap + idempotent: this helper is importable on its own, so it
+            # cannot assume main() (which also calls load_env) is what invoked it.
             cw = Cyberwave()
         frame = capture_still(device=device)
         from PIL import Image  # lazy: only the real run needs Pillow
@@ -387,7 +391,7 @@ def main(argv: list[str] | None = None) -> int:
         else:
             from cyberwave import Cyberwave  # lazy: no credentials needed for dry-run
 
-            client = Cyberwave()
+            client = Cyberwave()  # main() has already called load_env()
         resolve_pick = _perceiving_resolver(
             client=client,
             homography_path=args.homography,
