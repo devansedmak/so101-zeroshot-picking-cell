@@ -3,15 +3,35 @@
 ``fulfill_order`` closes the loop when a ``verify`` callable is injected (the thesis,
 decisions.md D9): failed verification retries once, then raises an ERROR alert. Without
 a verifier it stays the perception-free walking skeleton on hardcoded poses.
+
+``order_api`` is the *order-driven* front door: a stdlib webhook receiver whose
+``POST /orders`` runs one order through this same loop (``python -m
+src.agent_service.order_api``).
 """
+
+from typing import Any
 
 from .alerts import build_failed_alert, build_fulfilled_alert, send_alert
 from .loop import MAX_ATTEMPTS, Fulfillment, Verifier, VerifyOutcome, fulfill_order
 from .poses import UnknownBin, UnknownItem, pick_plan, pick_plan_from_table, place_plan
 
+# order_api is exported LAZILY (PEP 562): importing it here eagerly would make
+# `python -m src.agent_service.order_api` emit a "found in sys.modules" RuntimeWarning
+# right before the demo, and would pull http.server into every import of this package.
+_LAZY = {"Runner", "make_handler", "make_runner", "make_server"}
+
+
+def __getattr__(name: str) -> Any:  # noqa: ANN401
+    if name in _LAZY:
+        from . import order_api
+
+        return getattr(order_api, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 __all__ = [
     "MAX_ATTEMPTS",
     "Fulfillment",
+    "Runner",
     "UnknownBin",
     "UnknownItem",
     "VerifyOutcome",
@@ -19,6 +39,9 @@ __all__ = [
     "build_failed_alert",
     "build_fulfilled_alert",
     "fulfill_order",
+    "make_handler",
+    "make_runner",
+    "make_server",
     "pick_plan",
     "pick_plan_from_table",
     "place_plan",
