@@ -10,6 +10,7 @@ from __future__ import annotations
 import pytest
 
 from src.agent_service import (
+    build_failed_alert,
     build_fulfilled_alert,
     fulfill_order,
     send_alert,

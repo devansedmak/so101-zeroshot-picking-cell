@@ -14,8 +14,10 @@ so the whole loop is unit-testable with a fake robot (mirrors tests/test_motion.
 not part of the pure payload — default "simulation" (our only entrypoint today; pass
 "edge" once the loop runs on real hardware, D9).
 
-The closed-loop visual verification that will gate this alert is the project thesis
-(decisions.md D9); for the skeleton, "arm completed both moves" == fulfilled.
+The closed-loop visual verification that gates these alerts is the project thesis
+(decisions.md D9): with a verifier wired in, "fulfilled" means the VLM saw the item in
+the bin (``build_fulfilled_alert``) and a double failure raises an ERROR alert
+(``build_failed_alert``). Without one, "arm completed both moves" == fulfilled.
 """
 
 from __future__ import annotations
@@ -39,6 +41,24 @@ def build_fulfilled_alert(order: Order) -> dict[str, str]:
         "description": f"Picked {order.item} and placed it in bin {order.bin}.",
         "alert_type": "order_fulfilled",
         "severity": "info",
+        "category": "business",
+    }
+
+
+def build_failed_alert(order: Order, reason: str) -> dict[str, str]:
+    """The alert payload for an order that FAILED visual verification (pure).
+
+    Counterpart of ``build_fulfilled_alert`` for the closed loop's other branch
+    (docs/demo-scenario.md step 5): after pick+place+verify failed twice, a human has
+    to look — hence ``severity="error"``. ``reason`` is the verifier's verdict text.
+    """
+    return {
+        "name": f"Order FAILED: {order.item} → bin {order.bin}",
+        "description": (
+            f"Could not verify {order.item} in bin {order.bin} after 2 attempts. {reason}"
+        ),
+        "alert_type": "order_failed",
+        "severity": "error",
         "category": "business",
     }
 
