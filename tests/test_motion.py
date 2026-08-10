@@ -23,7 +23,11 @@ class FakeJoints:
     def __init__(self) -> None:
         self.calls: list[tuple[str, float, bool]] = []
 
-    def set(self, joint_name: str, position: float, degrees: bool = True):
+    # NOTE: the real SDK signature is `set(..., degrees: bool = False)` — i.e. RADIANS by
+    # default. The fake mirrors that default deliberately: if it defaulted to True, dropping
+    # `degrees=True` at the call site would still pass every test here while sending degree
+    # values to a real arm as radians (a 30° command becomes 30 rad). Keep this False.
+    def set(self, joint_name: str, position: float, degrees: bool = False):
         self.calls.append((joint_name, position, degrees))
 
 
@@ -210,3 +214,25 @@ def test_zero_duration_snaps_in_one_step():
     # duration 0 → single snap: each joint commanded exactly once
     assert _positions_for(robot, "1") == [pytest.approx(25)]
     assert len(robot.joints.calls) == len(JOINTS)
+
+
+def test_every_sdk_call_passes_degrees_explicitly():
+    """Guards the units boundary: the real SDK's `joints.set` defaults to RADIANS.
+
+    Our poses are all in degrees, so every command must set degrees=True explicitly.
+    Dropping it would silently reinterpret a 30° target as 30 rad on real hardware —
+    the kind of bug that only shows up when the arm is plugged in.
+    """
+    robot = FakeRobot()
+    ex = MotionExecutor(robot)
+    ex.execute(
+        MotionPlan(
+            actions=[
+                Action(type="set_pose", pose={"1": 30, "2": 20}, duration=0.5),
+                Action(type="set_joint", joint="3", angle=-15, duration=0.5),
+                Action(type="home", duration=0.5),
+            ]
+        )
+    )
+    assert robot.joints.calls, "expected joint commands"
+    assert all(degrees is True for _, _, degrees in robot.joints.calls)
