@@ -301,8 +301,15 @@ def self_test(app: DashboardApp, args: argparse.Namespace) -> int:
           ident["api_key"] in (True, False) and (not key or key not in blob.decode()),
           "only a present/absent boolean is exposed")
 
-    status, _ = post("/mode", {"mode": "fusion"})
-    check("POST /mode", status == 200 and json.loads(get("/state")[1])["mode"] == "fusion")
+    # Assert on the POST's own response, NOT on a following GET /state: when --mock is
+    # running, its script emits a `reset` carrying the mock's mode (src/gui/mock.py) on
+    # every loop, so a reset landing between the POST and the GET reverts `state.mode`
+    # and the check fails — observed roughly 1 run in 4. That is a race in the check,
+    # not a defect in set_mode, and re-reading shared state that a live producer is
+    # concurrently writing can never be made reliable. The POST response is the
+    # authoritative result of the call under test.
+    status, blob = post("/mode", {"mode": "fusion"})
+    check("POST /mode", status == 200 and json.loads(blob)["mode"] == "fusion")
     post("/mode", {"mode": args.mode})
     status, blob = post("/events", {"kind": "log", "text": "self-test"})
     check("POST /events", status == 200 and json.loads(blob)["applied"] == 1)
