@@ -48,7 +48,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from src.control import MotionExecutor
+from src.control import GraspAngleUnreachable, MotionExecutor
 from src.control.sim_session import load_env, open_sim_executor
 from src.wms_mock import Order, OrderSource
 
@@ -234,6 +234,12 @@ def _perceiving_resolver(
     abort a demo run**. Per-order failures (item not detected, capture failed, target
     unreachable) also fall back with a ⚠ instead of failing the order.
 
+    The ONE deliberate exception is ``GraspAngleUnreachable``: there the item WAS seen
+    and its position IS reachable — only its orientation is impossible for the wrist.
+    Falling back to a hardcoded pose would grasp a seen item at a knowingly wrong angle,
+    so that one is surfaced as a fulfilment failure (``fulfill_order`` records it as a
+    failed Fulfillment) whose message tells the operator to rotate the object.
+
     Everything perception is imported lazily so the default dry-run path stays
     dependency-free.
     """
@@ -265,7 +271,14 @@ def _perceiving_resolver(
                 located.y_mm,
                 pixel=located.pixel,
                 frame=str(located.frame) if located.frame else None,
+                axis_deg=located.axis_deg,
             )
+        except GraspAngleUnreachable as e:
+            # Seen, and reachable — only the grasp ANGLE is impossible. A hardcoded-pose
+            # fallback here would grasp the item at a knowingly wrong angle, so fail the
+            # order loudly instead; the message says how to fix it (rotate the object).
+            print(f"[run_order] ✋ grasp angle unreachable: {e}")
+            raise
         except Exception as e:  # noqa: BLE001 — perception must never fail an order
             print(f"[run_order] ⚠ perceived pick unavailable: {type(e).__name__}: {e}")
             print(f"[run_order]   → falling back to the hardcoded pose for {order.item!r}.")

@@ -6,6 +6,8 @@ BERT-NER + GroundingDINO remain an offline fallback (reference/old-pickplace.md)
 ``verify_placement`` reuses the same ``detect_points`` call to answer "is it in the bin?".
 ``locate_item`` is the composition the loop consumes: capture → detect → homography →
 table (X, Y) mm, i.e. the pick target the IK path needs (see locate.py for why).
+``orient`` adds the *how it is turned* to that *where*, so the wrist can roll and the
+jaws close across a long object instead of end-on.
 """
 
 from .detect import (
@@ -27,6 +29,7 @@ from .locate import (
     load_homography,
     locate_item,
 )
+from .orient import MIN_ELONGATION, axis_angle_table, long_axis_pixels
 from .verify import (
     DEFAULT_BIN_REGIONS_PATH,
     BinRegion,
@@ -43,6 +46,7 @@ from .verify import (
 __all__ = [
     "DEFAULT_BIN_REGIONS_PATH",
     "DEFAULT_HOMOGRAPHY_PATH",
+    "MIN_ELONGATION",
     "TASK_BOXES",
     "TASK_POINTS",
     "BinRegion",
@@ -57,12 +61,14 @@ __all__ = [
     "ReprojectionError",
     "UnknownBinRegion",
     "VerifyResult",
+    "axis_angle_table",
     "bin_region_for",
     "detect",
     "evaluate_placement",
     "load_bin_regions",
     "load_homography",
     "locate_item",
+    "long_axis_pixels",
     "parse_detections",
     "pick_target",
     "save_bin_regions",

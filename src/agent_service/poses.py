@@ -28,9 +28,23 @@ from typing import Any
 
 from src.control import MotionPlan, solve_ik
 
-# Gripper (joint "6") symbolic open/close angles, well inside DEFAULT_JOINT_LIMITS.
-GRIPPER_OPEN = -40.0
-GRIPPER_CLOSE = 20.0
+# Gripper (joint "6") symbolic open/close angles, in the follower's own calibrated
+# 0°→128.9° span (hardware/config/joint-ranges.md) and inside DEFAULT_JOINT_LIMITS["6"].
+#
+# MEASURED ON HARDWARE 2026-08-11 — these were −40°/+20°, guesses that predate any
+# gripper calibration and put "open" *outside* the servo's range entirely:
+#   * jaws pushed shut by hand read 0.107 rad = 6.1° on the encoder → LOW = SHUT;
+#   * a commanded sweep 110° → 60° → 10° → 110° was observed as fully open → about
+#     half closed → almost fully shut → fully open again.
+# So the axis is unambiguous: HIGH = OPEN, LOW = SHUT, and the old −40° "open" would
+# have driven hard into (or been clamped to) the shut end.
+#
+# 10° sits just above the 6.1° hard-shut reading, so a grasp squeezes rather than stalls
+# against the stop; 105° is comfortably open without reaching the 128.9° mechanical end.
+# ⚠ One constant angle for EVERY object — grasp force/width are not modelled at all
+# (see hardware/config/joint-ranges.md). Keep in sync with control.ik.GRIPPER_OPEN.
+GRIPPER_OPEN = 105.0
+GRIPPER_CLOSE = 10.0
 
 # item → arm pose hovering "over" that item, gripper open. Placeholder geometry.
 PICK_POSES: dict[str, dict[str, float]] = {
@@ -71,14 +85,23 @@ def pick_plan(item: str) -> MotionPlan:
     )
 
 
-def pick_plan_from_table(x_mm: float, y_mm: float) -> MotionPlan:
+def pick_plan_from_table(
+    x_mm: float,
+    y_mm: float,
+    axis_deg: float | None = None,
+) -> MotionPlan:
     """IK-driven pick at a table (X, Y) mm — the camera-gated successor to ``pick_plan``.
 
     Solves IK for the target (gripper vertical, open) then closes to grasp; same
     shape as ``pick_plan`` but the pose comes from detect→homography→IK rather than
     a hardcoded lookup. Raises ``control.Unreachable`` if the target is out of reach.
+
+    ``axis_deg`` is the object's long axis on the table (perception.orient): given one,
+    the wrist rolls so the jaws close across it instead of along it. ``None`` ⇒ the
+    previous fixed-roll grasp. Raises ``control.GraspAngleUnreachable`` if the wrist
+    cannot supply that roll.
     """
-    joints = solve_ik(x_mm, y_mm)
+    joints = solve_ik(x_mm, y_mm, axis_deg=axis_deg)
     return MotionPlan.from_dict(
         {
             "say": f"picking at table ({x_mm:.0f}, {y_mm:.0f}) mm",
@@ -102,7 +125,9 @@ class PickChoice:
 
     ``source`` is :data:`HARDCODED` (the throwaway pose table) or :data:`PERCEIVED`
     (VLM → homography → IK). The extra fields are only set on the perceived path and
-    exist for logs/alerts/demo narration, not for control.
+    exist for logs/alerts/demo narration, not for control. ``axis_deg`` records the
+    measured object orientation the wrist roll was derived from (``None`` = none
+    measured, fixed-roll grasp) — the provenance that explains a rotated wrist.
     """
 
     plan: MotionPlan
@@ -110,6 +135,7 @@ class PickChoice:
     table_mm: tuple[float, float] | None = None
     pixel: tuple[float, float] | None = None
     frame: str | None = None
+    axis_deg: float | None = None
 
     @property
     def perceived(self) -> bool:
@@ -122,6 +148,7 @@ class PickChoice:
             "table_mm": list(self.table_mm) if self.table_mm else None,
             "pixel": list(self.pixel) if self.pixel else None,
             "frame": self.frame,
+            "axis_deg": self.axis_deg,
         }
 
 
@@ -136,14 +163,20 @@ def pick_choice_from_table(
     *,
     pixel: tuple[float, float] | None = None,
     frame: str | None = None,
+    axis_deg: float | None = None,
 ) -> PickChoice:
-    """The perceived pick: IK at a detected table (X, Y) mm. Raises ``Unreachable``."""
+    """The perceived pick: IK at a detected table (X, Y) mm.
+
+    Raises ``Unreachable`` (target out of reach) or ``GraspAngleUnreachable``
+    (``axis_deg`` given but the wrist cannot roll that far).
+    """
     return PickChoice(
-        pick_plan_from_table(x_mm, y_mm),
+        pick_plan_from_table(x_mm, y_mm, axis_deg),
         PERCEIVED,
         table_mm=(float(x_mm), float(y_mm)),
         pixel=pixel,
         frame=frame,
+        axis_deg=float(axis_deg) if axis_deg is not None else None,
     )
 
 

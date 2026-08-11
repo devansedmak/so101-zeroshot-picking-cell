@@ -75,6 +75,10 @@ class LocatedItem:
     ``pixel`` is the grasp point in the source frame's pixels, ``table_mm`` the same
     point on the table plane in mm (IK input), ``frame`` the JPEG it was decided on
     (keep it: it is the demo's narration and the post-mortem artifact for a bad pick).
+
+    ``axis_deg`` is the object's long axis on the table (degrees mod 180, from
+    ``orient``) — what lets IK roll the wrist so the jaws close across the object.
+    ``None`` means "no measurable axis": the pick still happens, at the default roll.
     """
 
     item: str
@@ -83,6 +87,7 @@ class LocatedItem:
     label: str = ""
     frame: Path | None = None
     detection: Detection | None = None
+    axis_deg: float | None = None
 
     @property
     def x_mm(self) -> float:
@@ -100,13 +105,15 @@ class LocatedItem:
             "pixel": [self.pixel[0], self.pixel[1]],
             "table_mm": [self.table_mm[0], self.table_mm[1]],
             "frame": str(self.frame) if self.frame else None,
+            "axis_deg": self.axis_deg,
         }
 
     def describe(self) -> str:
         """One terse line for the run log / demo narration."""
+        axis = f", axis {self.axis_deg:.0f}°" if self.axis_deg is not None else ""
         return (
             f"{self.item!r} at px=({self.pixel[0]:.0f}, {self.pixel[1]:.0f}) "
-            f"→ table ({self.table_mm[0]:.0f}, {self.table_mm[1]:.0f}) mm"
+            f"→ table ({self.table_mm[0]:.0f}, {self.table_mm[1]:.0f}) mm{axis}"
         )
 
 
@@ -210,6 +217,21 @@ def locate_item(
 
     # The only geometry here: pixel → table plane. Frame assumption: see module TODO.
     x_mm, y_mm = homography.project((target.x, target.y))
+
+    # Best-effort: how is the item TURNED? (lets IK roll the wrist so the jaws close
+    # across a long thin object instead of end-on.) Everything about this is optional —
+    # OpenCV may be absent, the frame may be a stub, the blob may be round — and a
+    # missing angle must degrade to the old fixed-roll grasp, never fail an order.
+    axis_deg: float | None = None
+    try:
+        from . import orient  # noqa: PLC0415 — lazy: OpenCV-gated, same rule as capture
+
+        ends = orient.long_axis_pixels(frame, (target.x, target.y))
+        if ends is not None:
+            axis_deg = orient.axis_angle_table(homography, *ends)
+    except Exception:  # noqa: BLE001 — orientation is a bonus, never a failure mode
+        axis_deg = None
+
     return LocatedItem(
         item=item,
         pixel=(target.x, target.y),
@@ -217,4 +239,5 @@ def locate_item(
         label=target.label,
         frame=frame,
         detection=target,
+        axis_deg=axis_deg,
     )

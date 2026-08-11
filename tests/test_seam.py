@@ -16,11 +16,12 @@ Run with PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 (see runbook).
 from __future__ import annotations
 
 import json
+import re
 
 import pytest
 
 from src.agent_service import run_order
-from src.agent_service.poses import PICK_POSES, pick_plan_from_table
+from src.agent_service.poses import PICK_POSES, pick_choice_from_table, pick_plan_from_table
 from src.control import validate_plan
 from src.perception import Homography, parse_detections, pick_target
 
@@ -60,6 +61,24 @@ def test_detect_to_homography_to_ik_yields_a_valid_plan():
     assert validate_plan(plan) == []  # the composed pipeline is executable
 
 
+def test_a_measured_object_axis_reaches_the_wrist_roll_of_the_plan():
+    """The orientation half of the seam: perception's axis must survive into the pose.
+
+    Without this, the axis is measured and then quietly dropped — which looks identical
+    to today's behaviour right up until a long object squirts out of the jaws.
+    """
+    pose_of = lambda plan: next(a.pose for a in plan.actions if a.type == "set_pose")  # noqa: E731
+
+    assert pose_of(pick_plan_from_table(150.0, 0.0))["5"] == 0.0  # no axis ⇒ unchanged
+    rolled = pose_of(pick_plan_from_table(150.0, 0.0, 0.0))
+    assert rolled["5"] == pytest.approx(-90.0)  # object lying along the reach direction
+    assert validate_plan(pick_plan_from_table(150.0, 0.0, 0.0)) == []
+
+    choice = pick_choice_from_table(150.0, 0.0, axis_deg=0.0)
+    assert choice.axis_deg == 0.0  # provenance: WHY the wrist is rolled
+    assert choice.to_dict()["axis_deg"] == 0.0
+
+
 def test_seam_holds_across_the_calibrated_patch():
     # Every corner detection of the calibrated image must also compose to a valid plan.
     homography = Homography.fit(_PIXELS, _TABLE_MM)
@@ -76,14 +95,29 @@ def test_seam_holds_across_the_calibrated_patch():
 # --- the seam through the REAL entrypoint: run_order --perceive ----------
 
 
-def _offline_perceive_argv(tmp_path, *, calibrated: bool, detections=_CANNED, item="red marker"):
+def _offline_perceive_argv(
+    tmp_path,
+    *,
+    calibrated: bool,
+    detections=_CANNED,
+    item="red marker",
+    frame_image=None,
+):
     """``--perceive`` argv that is guaranteed offline: canned VLM output, saved frame.
 
     No camera (``--frame``), no VLM call (``--detections`` ⇒ the canned client), no
     connection (dry-run is the default), and no image decode (``--frame-size``).
+    ``frame_image`` (a BGR array) writes a REAL frame instead of the stub, for the tests
+    that need the grasp-axis estimator to actually see something.
     """
-    frame = tmp_path / "frame.jpg"
-    frame.write_bytes(b"")  # never opened: --frame-size makes the size explicit
+    if frame_image is None:
+        frame = tmp_path / "frame.jpg"
+        frame.write_bytes(b"")  # never opened: --frame-size makes the size explicit
+    else:
+        import cv2  # noqa: PLC0415 — only the axis tests need a decodable frame
+
+        frame = tmp_path / "frame.png"  # PNG: no JPEG ringing on the drawn edges
+        cv2.imwrite(str(frame), frame_image)
     dets = tmp_path / "dets.json"
     dets.write_text(json.dumps(detections))
     calib = tmp_path / "homography.json"
@@ -156,6 +190,58 @@ def test_perceive_undetected_and_unhardcoded_fails_the_order_without_raising(tmp
     assert rc == 1  # a recorded failure, not a traceback
     assert "⚠ perceived pick unavailable: ItemNotFound" in out
     assert "❌ failed: ghost → bin A" in out and "UnknownItem" in out
+
+
+def _frame_with_a_bar(angle_deg: float):
+    """640×480 white frame with one red bar at pixel (480, 120) — where _CANNED points."""
+    cv2 = pytest.importorskip("cv2")
+    np = pytest.importorskip("numpy")
+    import math
+
+    img = np.full((IMG_H, IMG_W, 3), (255, 255, 255), np.uint8)
+    t = math.radians(angle_deg)
+    d, n = np.array([math.cos(t), math.sin(t)]), np.array([-math.sin(t), math.cos(t)])
+    c = np.array([480.0, 120.0])
+    box = np.round(
+        np.array([c + d * 60 + n * 13, c + d * 60 - n * 13, c - d * 60 - n * 13, c - d * 60 + n * 13])
+    ).astype(np.int32)
+    cv2.fillPoly(img, [box], (40, 40, 200))
+    return img
+
+
+def test_perceive_rolls_the_wrist_to_the_seen_object_axis(tmp_path, capsys):
+    """The headline of oriented grasping, through the real entrypoint: a bar lying at an
+    angle produces a NON-zero wrist_roll, and the run log says which angle it saw."""
+    rc = run_order.main(
+        _offline_perceive_argv(tmp_path, calibrated=True, frame_image=_frame_with_a_bar(174.0))
+    )
+    out = capsys.readouterr().out
+
+    assert rc == 0
+    assert _PERCEIVED_SAY in out and "axis 165°" in out  # ≈174° in px, sheared by the calibration
+    # The bar lies along the reach direction, so the wrist must roll ~a quarter turn to
+    # close across it — the old fixed 5=+0.0° would have grasped it end-on.
+    rolls = [float(v) for v in re.findall(r"5=([-+][\d.]+)°", out)]
+    assert any(abs(v) > 45.0 for v in rolls)
+    assert "✅ fulfilled" in out
+
+
+def test_perceive_fails_the_order_when_the_grasp_angle_is_out_of_range(tmp_path, capsys, monkeypatch):
+    """An angle the wrist cannot reach must FAIL loudly, not fall back to a pose that
+    would grasp a seen item at a knowingly wrong angle. Reproduced by restoring the
+    pre-widening ±60° roll limit (hardware/config/joint-ranges.md)."""
+    from src.control.motion import DEFAULT_JOINT_LIMITS
+
+    monkeypatch.setitem(DEFAULT_JOINT_LIMITS, "5", (-60, 60))
+    rc = run_order.main(
+        _offline_perceive_argv(tmp_path, calibrated=True, frame_image=_frame_with_a_bar(174.0))
+    )
+    out = capsys.readouterr().out
+
+    assert rc == 1
+    assert "✋ grasp angle unreachable" in out and "rotate the object" in out
+    assert "❌ failed: red marker → bin A" in out
+    assert "picking red marker" not in out  # NOT silently degraded to the hardcoded pose
 
 
 def test_fulfill_order_records_which_pick_path_it_took():

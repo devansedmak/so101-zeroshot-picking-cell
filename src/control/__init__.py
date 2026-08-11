@@ -1,7 +1,9 @@
 """Control: SO-101 IK, pick/place skills, joint clamps + ramped motion (safety layer)."""
 
 from .ik import (
+    JAW_OFFSET_DEG,
     PICK_Z,
+    GraspAngleUnreachable,
     Unreachable,
     forward_kinematics,
     in_limits,
@@ -21,8 +23,10 @@ from .motion import (
 __all__ = [
     "Action",
     "DEFAULT_JOINT_LIMITS",
+    "JAW_OFFSET_DEG",
     "JOINT_LABELS",
     "JOINTS",
+    "GraspAngleUnreachable",
     "MotionExecutor",
     "MotionPlan",
     "PICK_Z",

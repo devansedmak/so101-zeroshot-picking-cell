@@ -223,6 +223,71 @@ def test_unreadable_frame_without_a_size_raises_a_typed_error(tmp_path):
         )
 
 
+# --- the grasp axis rides along (best effort, never fatal) ---------------
+
+
+def _frame_with_a_marker(tmp_path, angle_deg: float):
+    """A frame with one filled rotated bar at the image centre, at a KNOWN image angle."""
+    cv2 = pytest.importorskip("cv2")
+    np = pytest.importorskip("numpy")
+    import math
+
+    img = np.full((IMG_H, IMG_W, 3), (255, 255, 255), np.uint8)
+    t = math.radians(angle_deg)
+    d = np.array([math.cos(t), math.sin(t)])
+    n = np.array([-math.sin(t), math.cos(t)])
+    c = np.array([IMG_W / 2, IMG_H / 2])
+    box = np.round(
+        np.array([c + d * 70 + n * 15, c + d * 70 - n * 15, c - d * 70 - n * 15, c - d * 70 + n * 15])
+    ).astype(np.int32)
+    cv2.fillPoly(img, [box], (40, 40, 200))
+    path = tmp_path / "overhead.png"  # PNG: no JPEG ringing on the drawn edges
+    cv2.imwrite(str(path), img)
+    return path
+
+
+def test_locate_item_reports_the_object_axis_in_table_degrees(tmp_path):
+    import math
+
+    angle_px = 30.0
+    frame = _frame_with_a_marker(tmp_path, angle_px)
+    # The VLM points at the image centre, i.e. at the bar: [y, x] on the 0..1000 grid.
+    located = locate_item(
+        "red marker",
+        client=FakeVLM([{"point": [500, 500], "label": "red marker"}]),
+        homography=_homography(),
+        image=frame,
+    )
+
+    # Ground truth derived from the correspondences, not from the code: this calibration
+    # scales x and y differently (100 mm / 640 px vs 200 mm / 480 px), so a 30° bar in
+    # pixels is NOT 30° on the table — which is exactly why the angle is taken after
+    # projecting both endpoints.
+    sx, sy = 100.0 / IMG_W, 200.0 / IMG_H
+    expected = math.degrees(
+        math.atan2(sy * math.sin(math.radians(angle_px)), sx * math.cos(math.radians(angle_px)))
+    ) % 180.0
+    assert located.axis_deg is not None
+    assert min(abs(located.axis_deg - expected), 180 - abs(located.axis_deg - expected)) < 3.0
+    assert f"axis {located.axis_deg:.0f}°" in located.describe()
+
+
+def test_a_frame_with_no_measurable_axis_still_locates_the_item():
+    # The stub frame here is never even decodable — orientation must degrade to None
+    # instead of raising, leaving today's fixed-roll behaviour intact.
+    located = locate_item(
+        "red marker",
+        client=FakeVLM([{"point": [250, 750], "label": "red marker"}]),
+        homography=_homography(),
+        image="/nonexistent/frame.jpg",
+        image_size=(IMG_W, IMG_H),
+    )
+    assert located.axis_deg is None
+    assert located.table_mm == pytest.approx((175.0, -50.0), abs=1e-6)
+    assert located.to_dict()["axis_deg"] is None
+    assert "axis" not in located.describe()
+
+
 # --- calibration I/O ----------------------------------------------------
 
 

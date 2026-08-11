@@ -93,6 +93,28 @@ KIT_NAME_HINTS: tuple[str, ...] = (
 _DEFAULT_WARMUP = 5
 _FFMPEG_TIMEOUT_S = 20.0
 
+#: Frame size every capture in the pipeline must use. The kit camera (05a3:9230)
+#: offers 1920x1080 over MJPEG only; raw YUYV maxes out at 640x480 on USB 2.0.
+#: This is a CALIBRATION-CRITICAL constant: homography.json and bin-regions.json
+#: store *pixel* coordinates, so changing it after calibrating invalidates both.
+CAPTURE_SIZE = (1920, 1080)
+
+
+def _warn_if_unexpected_size(actual: tuple[int, int]) -> None:
+    """Shout if the driver gave us a size other than :data:`CAPTURE_SIZE`.
+
+    A silent fallback would still produce a perfectly good-looking JPEG whose pixel
+    coordinates no longer match the calibration — the worst possible failure mode.
+    """
+    if tuple(actual) != CAPTURE_SIZE:
+        print(
+            f"[capture] ⚠ WARNING: got {actual[0]}x{actual[1]}, expected "
+            f"{CAPTURE_SIZE[0]}x{CAPTURE_SIZE[1]}. Pixel coordinates will NOT match "
+            "hardware/config/homography.json or bin-regions.json — recalibrate or fix "
+            "the camera before trusting any pick.",
+            file=sys.stderr,
+        )
+
 
 # --------------------------------------------------------------- enumeration
 def _node_index(name: str) -> int:
@@ -234,6 +256,11 @@ def _capture_cv2(device: str, out_path: Path, warmup_frames: int) -> None:
                 "  fix: `python -m src.perception.capture` to list nodes; stop any other\n"
                 "       process holding the camera (`fuser -v /dev/video*`); try --backend ffmpeg."
             )
+        # MJPEG *before* the size: raw YUYV at 1080p exceeds USB 2.0 bandwidth, so the
+        # driver silently falls back to 640x480 if the size is requested on its own.
+        cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, CAPTURE_SIZE[0])
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, CAPTURE_SIZE[1])
         frame = None
         # Auto-exposure/auto-white-balance need a few frames or the first one is black.
         for _ in range(max(0, warmup_frames) + 1):
@@ -242,6 +269,7 @@ def _capture_cv2(device: str, out_path: Path, warmup_frames: int) -> None:
                 frame = buf
         if frame is None:
             raise CaptureError(f"cv2 opened {device} but read no frame (all reads failed)")
+        _warn_if_unexpected_size((frame.shape[1], frame.shape[0]))
         out_path.parent.mkdir(parents=True, exist_ok=True)
         if not cv2.imwrite(str(out_path), frame):
             raise CaptureError(f"cv2 could not write {out_path} (bad extension or path?)")
@@ -254,7 +282,13 @@ def _capture_ffmpeg(device: str, out_path: Path, warmup_frames: int) -> None:
     if exe is None:  # pragma: no cover — guarded by choose_backend
         raise CaptureError("the ffmpeg binary is not on PATH")
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    cmd = [exe, "-hide_banner", "-loglevel", "error", "-y", "-f", "v4l2", "-i", device]
+    cmd = [
+        exe, "-hide_banner", "-loglevel", "error", "-y", "-f", "v4l2",
+        # Match _capture_cv2 exactly: a backend switch must not change the frame size,
+        # or every pixel coordinate in homography.json / bin-regions.json goes stale.
+        "-input_format", "mjpeg", "-video_size", f"{CAPTURE_SIZE[0]}x{CAPTURE_SIZE[1]}",
+        "-i", device,
+    ]
     if warmup_frames > 0:
         # Drop the first N frames *after* decoding, then take exactly one.
         cmd += ["-vf", f"select=gte(n\\,{int(warmup_frames)})", "-vsync", "0"]
@@ -272,6 +306,13 @@ def _capture_ffmpeg(device: str, out_path: Path, warmup_frames: int) -> None:
             f"ffmpeg failed on {device} (exit {proc.returncode}): "
             f"{(proc.stderr or '').strip()[:400]}"
         )
+    try:
+        from PIL import Image
+
+        with Image.open(out_path) as im:
+            _warn_if_unexpected_size(im.size)
+    except Exception:  # noqa: BLE001 — a size check must never fail the capture
+        pass
 
 
 def capture_still(

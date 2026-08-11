@@ -5,7 +5,7 @@ values, not measured ones. The FK∘IK round-trip is self-consistent either way,
 correct — but the mapping from a table `(x, y)` in mm to real joint angles is only as accurate as
 these four numbers. Wrong lengths ⇒ the gripper reaches short/long by that error.
 
-The assembled-version vendor manual lists no link lengths ([O9](../../questions-discord.md)), and
+The assembled-version vendor manual lists no link lengths (O9), and
 chasing an answer on Discord is no longer worth it. **Just measure with a ruler** — 5 minutes.
 
 ## The four numbers (mm)

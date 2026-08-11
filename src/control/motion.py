@@ -52,21 +52,26 @@ JOINT_LABELS: dict[str, str] = {
 # the object. The arm reaches ±96.6° there; only our guess said otherwise. Clamping is
 # still always on — it just no longer clamps away real, calibrated reach.
 #
-# wrist_roll (5) stays deliberately narrow at ±60° despite a measured ±179.5°: its zero sits
-# near the encoder 0↔4095 seam and it wrapped during calibration (calibration-notes.md), and
-# a top-down pick never needs roll.
+# wrist_roll (5) is ±90°, not the measured ±179.5°. It was ±60° while a top-down pick never
+# needed roll; oriented grasping (ik.solve_ik(axis_deg=...)) needs it, because the jaws must
+# close ACROSS the object's long axis. ±90° is the *exact* amount required: the parallel jaw
+# is symmetric under a 180° roll, so every object orientation folds into [-90, +90) — which
+# means this range has no dead wedge at all, while still staying far from the encoder
+# 0↔4095 seam near ±180° that motivated the original narrowing (calibration-notes.md).
 #
-# ⚠ gripper (6) is INTENTIONALLY left at the old guess. The follower's calibrated gripper
-# span is 0°→128.9°, so poses.py's "open = -40°" is outside it — but whether the driver
-# applies its own sign/offset is unverified, and guessing wrong could command a CLOSE when we
-# mean OPEN. Verify on hardware first: hardware/config/joint-ranges.md §gripper convention.
+# gripper (6) was the last ⚠ guess (±60°, convention unknown) and is now MEASURED, on
+# hardware 2026-08-11: jaws shut by hand read 6.1°, and a 110→60→10→110° sweep was seen as
+# open → half closed → nearly shut → open. So LOW = SHUT, HIGH = OPEN on the follower's own
+# calibrated 0→128.9° span, and the old range was doubly wrong — it admitted negative angles
+# the servo does not have, and capped "open" at 60° (half closed). 124° keeps the usual ~5°
+# margin off the mechanical end. Details: hardware/config/joint-ranges.md §gripper.
 DEFAULT_JOINT_LIMITS: dict[str, tuple[float, float]] = {
     "1": (-113, 113),  # measured ±118.9
     "2": (-97, 97),    # measured ±102.8
     "3": (-91, 91),    # measured ±96.6
     "4": (-96, 96),    # measured ±101.6
-    "5": (-60, 60),    # measured ±179.5 — narrowed on purpose (encoder seam)
-    "6": (-60, 60),    # ⚠ unverified convention, see above
+    "5": (-90, 90),    # measured ±179.5 — still narrowed (encoder seam), see above
+    "6": (0, 124),     # measured 0 → 128.9 (0 = shut, 124 = open)
 }
 
 MAX_DURATION_S: float = 5.0
@@ -254,22 +259,42 @@ class MotionExecutor:
         if action.type == "set_joint":
             assert action.joint is not None and action.angle is not None
             target = clamp(action.joint, action.angle, self.joint_limits)
-            new_pose = {**self._current_pose, action.joint: target}
-            self._ramp_to(new_pose, action.duration)
+            self._ramp_to({action.joint: target}, action.duration)
             return
 
         if action.type == "set_pose":
             assert action.pose is not None
-            new_pose = dict(self._current_pose)
-            for j, v in action.pose.items():
-                new_pose[j] = clamp(j, v, self.joint_limits)
-            self._ramp_to(new_pose, action.duration)
+            self._ramp_to(
+                {j: clamp(j, v, self.joint_limits) for j, v in action.pose.items()},
+                action.duration,
+            )
             return
 
         raise ValueError(f"unknown action type: {action.type}")
 
     def _ramp_to(self, target_pose: dict[str, float], duration: float) -> None:
-        """Linearly interpolate every joint from current → target over ``duration``."""
+        """Interpolate the joints **named in ``target_pose``** from current → target.
+
+        ⚠ The key set of ``target_pose`` is the *command scope*: a joint that is not a
+        key here is never written to, at any step. Callers must therefore pass only the
+        joints they mean to move — ``home`` legitimately names all six, ``set_pose``
+        names exactly the keys the plan listed.
+
+        This is a safety property, not a micro-optimisation. It used to merge the action
+        into ``_current_pose`` and ramp all six every time, which meant an action that
+        said nothing about the gripper still commanded it — to ``_current_pose``'s
+        initial 0°, and 0° is the SHUT end of the follower's calibrated 0→128.9° gripper
+        span (hardware/config/joint-ranges.md). A fresh executor's very first ``set_pose``
+        therefore closed the jaws on whatever was between them; observed on hardware
+        2026-08-11 via ``tools/live_check.py``, whose pose deliberately omitted joint 6.
+
+        Known residual: ``_current_pose`` is only the last *commanded* pose, seeded with
+        0° for joints this executor has never written. The ramp for a joint's first
+        command therefore starts from an assumed 0°, not the arm's true angle. It only
+        affects the path, never the endpoint — but it means the first gripper command of
+        a session still passes near the shut end on its way out. Fixing it properly needs
+        a read-back of the servos' actual positions at construction time.
+        """
         if duration <= 0:
             self._snap_to(target_pose)
             return

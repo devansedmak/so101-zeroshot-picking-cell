@@ -150,8 +150,13 @@ def test_dry_run_tracks_pose_without_calling_robot():
 
 
 def _positions_for(robot: FakeRobot, joint: str) -> list[float]:
-    """Commands issued for a single joint (the executor re-sends the full pose each step)."""
+    """Every command issued for a single joint, in order (one per ramp step)."""
     return [pos for (name, pos, _) in robot.joints.calls if name == joint]
+
+
+def _joints_commanded(robot: FakeRobot) -> set[str]:
+    """The set of joints the executor actually wrote to."""
+    return {name for (name, _, _) in robot.joints.calls}
 
 
 def test_out_of_range_angle_is_clamped_before_sdk_call():
@@ -187,6 +192,68 @@ def test_set_pose_multijoint_arrives_together():
     assert ex._current_pose["2"] == pytest.approx(-30)
 
 
+# --- command scope: an action must not touch joints it never named -------
+
+
+def test_set_pose_commands_only_the_named_joints():
+    """A pose that says nothing about a joint must leave that joint alone.
+
+    Regression, found on hardware 2026-08-11: ``tools/live_check.py`` issued a set_pose
+    that deliberately EXCLUDED joint 6 — and the physical gripper closed anyway. The
+    executor merged the pose into ``_current_pose`` (initialised to 0° for all six) and
+    ramped the union, so every unnamed joint was commanded to 0°. For joint 6, 0° is the
+    SHUT end of the follower's calibrated 0→128.9° span (hardware/config/joint-ranges.md),
+    so a fresh executor's first pose silently clamped the jaws on whatever was in them.
+    """
+    robot = FakeRobot()
+    ex = MotionExecutor(robot, ramp_hz=10)
+    ex.execute(
+        MotionPlan(actions=[Action(type="set_pose", pose={"1": 20, "2": -30}, duration=1.0)])
+    )
+
+    assert _joints_commanded(robot) == {"1", "2"}
+    assert _positions_for(robot, "6") == []  # the jaws, specifically, were never touched
+    assert _positions_for(robot, "1")[-1] == pytest.approx(20)
+    assert _positions_for(robot, "2")[-1] == pytest.approx(-30)
+
+
+def test_set_joint_commands_only_that_joint():
+    robot = FakeRobot()
+    ex = MotionExecutor(robot, ramp_hz=10)
+    ex.execute(MotionPlan(actions=[Action(type="set_joint", joint="2", angle=15, duration=1.0)]))
+    assert _joints_commanded(robot) == {"2"}
+
+
+def test_a_later_pose_does_not_re_command_an_earlier_joint():
+    """Consecutive poses stay independent: the executor must not replay old targets.
+
+    Without this, "close the gripper" after a pick would re-send all five arm joints,
+    turning a 1-DOF grasp into a whole-arm move at the worst possible moment.
+    """
+    robot = FakeRobot()
+    ex = MotionExecutor(robot, ramp_hz=10)
+    ex.execute(
+        MotionPlan(
+            actions=[
+                Action(type="set_pose", pose={"1": 20, "2": -30}, duration=1.0),
+                Action(type="set_joint", joint="6", angle=10, duration=0.5),
+            ]
+        )
+    )
+    # joints 1/2 were commanded only during the first action, joint 6 only during the second
+    assert _joints_commanded(robot) == {"1", "2", "6"}
+    assert _positions_for(robot, "1")[-1] == pytest.approx(20)
+    assert ex._current_pose["1"] == pytest.approx(20)  # still tracked, just not re-sent
+
+
+def test_home_still_commands_every_joint():
+    """``home`` is the one action that legitimately names all six — it must keep doing so."""
+    robot = FakeRobot()
+    ex = MotionExecutor(robot, ramp_hz=10)
+    ex.execute(MotionPlan(actions=[Action(type="home", duration=0.5)]))
+    assert _joints_commanded(robot) == set(JOINTS)
+
+
 def test_home_returns_all_joints_to_zero():
     robot = FakeRobot()
     ex = MotionExecutor(robot, dry_run=True)
@@ -211,9 +278,10 @@ def test_zero_duration_snaps_in_one_step():
     robot = FakeRobot()
     ex = MotionExecutor(robot)
     ex.execute(MotionPlan(actions=[Action(type="set_joint", joint="1", angle=25, duration=0.0)]))
-    # duration 0 → single snap: each joint commanded exactly once
+    # duration 0 → single snap: the NAMED joint commanded exactly once, and nothing else
+    # commanded at all (see test_set_pose_commands_only_the_named_joints).
     assert _positions_for(robot, "1") == [pytest.approx(25)]
-    assert len(robot.joints.calls) == len(JOINTS)
+    assert len(robot.joints.calls) == 1
 
 
 def test_every_sdk_call_passes_degrees_explicitly():
