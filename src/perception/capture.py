@@ -1,18 +1,18 @@
-"""Grab ONE still overhead frame — robustly, three ways.
+"""Grab ONE still overhead frame, robustly, three ways.
 
-Everything downstream (detect.py → homography.py → IK → verify.py) starts from a
+Everything downstream (detect.py -> homography.py -> IK -> verify.py) starts from a
 single still frame, so this is the one hardware dependency the whole loop shares.
-Cohort office hours reported the dashboard *live stream* disconnecting every 4–5 s for
+Cohort office hours reported the dashboard *live stream* disconnecting every 4-5 s for
 many builders, and that the reliable path was a one-shot "get frame" call. So we never
 depend on a stream: three independent paths, in decreasing order of trust.
 
-1. ``capture_still()`` — local V4L2 webcam, OpenCV if importable else **ffmpeg**
+1. ``capture_still()``: local V4L2 webcam, OpenCV if importable else **ffmpeg**
    (`/usr/bin/ffmpeg`, confirmed present). This is the tomorrow-morning path.
-2. ``capture_twin_frame()`` — platform side, one REST ``latest-frame`` call.
-3. neither → :class:`CaptureError` with the device listing, so failures are readable.
+2. ``capture_twin_frame()``: platform side, one REST ``latest-frame`` call.
+3. neither -> :class:`CaptureError` with the device listing, so failures are readable.
 
-VERIFIED SDK SURFACE (introspected against the installed ``cyberwave`` 0.5.3 — not
-guessed; decisions.md D15 is the scar tissue that made this rule):
+VERIFIED SDK SURFACE (introspected against the installed ``cyberwave`` 0.5.3, not
+guessed; an earlier round of guessing is what made this rule):
 
     cw = Cyberwave(); twin = cw.twin(twin_id=...)      # -> CameraTwin
     twin.get_frame(format="bytes", *, path=None, source="cloud", sensor_id=None,
@@ -24,7 +24,7 @@ guessed; decisions.md D15 is the scar tissue that made this rule):
         #         "local"  = active twin.stream() frame, else USB cam at idx
         #         "zenoh"  = cw.data frames subscribe
         #         "remote_edge" = MQTT take_photo (raises on timeout; others fail-SOFT
-        #                         and return None — hence the None check below)
+        #                         and return None, hence the None check below)
         # NOTE: in cw.affect("simulation") ONLY source="cloud" is allowed (ValueError).
     Deprecated aliases kept as fallbacks for older/newer SDK shuffles:
         twin.capture_frame(format="path")            (mixins.py:364, DeprecationWarning)
@@ -35,7 +35,7 @@ Device auto-selection never hardcodes ``/dev/video4``: node numbers reshuffle on
 We read ``/sys/class/video4linux/*/name`` and **exclude the built-in Acer laptop camera**
 by name (see hardware/config/cameras.md).
 
-CLI (this is step 1 of the tomorrow-morning runbook):
+CLI (this is step 1 of the bring-up sequence):
     python -m src.perception.capture                    # list video devices
     python -m src.perception.capture --save frame.jpg   # grab one still
 """
@@ -67,7 +67,7 @@ class CaptureError(RuntimeError):
 SYS_V4L_DIR = Path("/sys/class/video4linux")
 
 # Built-in Acer laptop camera (USB 5986:215d, /dev/video0-3, "Integrated RGB Camera",
-# vendor SunplusIT). NEVER the overhead cam — a laptop-lid camera cannot be fixed
+# vendor SunplusIT). NEVER the overhead cam: a laptop-lid camera cannot be fixed
 # relative to the table, which planar homography requires (decisions D5/D11).
 BUILTIN_NAME_HINTS: tuple[str, ...] = (
     "integrated rgb",
@@ -79,7 +79,7 @@ BUILTIN_NAME_HINTS: tuple[str, ...] = (
 )
 
 # The WowRobo kit camera (USB 05a3:9230 "ARC International Camera"); the driver
-# container sees it as "USB2.0_CAM1". Hints only *rank* devices — anything that is not
+# container sees it as "USB2.0_CAM1". Hints only *rank* devices; anything that is not
 # the built-in is still eligible, so an unknown name never blocks the demo.
 KIT_NAME_HINTS: tuple[str, ...] = (
     "usb2.0_cam",
@@ -104,7 +104,7 @@ def _warn_if_unexpected_size(actual: tuple[int, int]) -> None:
     """Shout if the driver gave us a size other than :data:`CAPTURE_SIZE`.
 
     A silent fallback would still produce a perfectly good-looking JPEG whose pixel
-    coordinates no longer match the calibration — the worst possible failure mode.
+    coordinates no longer match the calibration, the worst possible failure mode.
     """
     if tuple(actual) != CAPTURE_SIZE:
         print(
@@ -126,7 +126,7 @@ def _node_index(name: str) -> int:
 def list_video_devices(sys_dir: str | Path = SYS_V4L_DIR) -> list[tuple[str, str]]:
     """Enumerate V4L2 nodes as ``(device_path, human_name)``, ordered by node number.
 
-    Reads ``/sys/class/video4linux/videoN/name`` (no v4l-utils needed — the host lacks
+    Reads ``/sys/class/video4linux/videoN/name`` (no v4l-utils needed, the host lacks
     it, see cameras.md). Returns ``[]`` when nothing is plugged in / the path is absent.
     """
     root = Path(sys_dir)
@@ -155,11 +155,11 @@ def _looks_like_kit(human: str) -> bool:
 
 
 def _sysfs_index(device: str, sys_dir: str | Path = SYS_V4L_DIR) -> int:
-    """``/sys/.../videoN/index`` — 0 is the capture node, 1+ is usually metadata.
+    """``/sys/.../videoN/index``: 0 is the capture node, 1+ is usually metadata.
 
     UVC cameras expose a capture node *and* a metadata node (the kit cam showed up as
     /dev/video4 + /dev/video5). Opening the metadata node yields no images, so prefer
-    index 0. Unknown ⇒ 0 (optimistic: try it rather than skip the only candidate).
+    index 0. Unknown means 0 (optimistic: try it rather than skip the only candidate).
     """
     node = Path(device).name
     try:
@@ -177,7 +177,7 @@ def select_device(
 
     Ranking: named-like-the-kit first, then capture nodes (sysfs ``index`` 0) before
     metadata nodes, then the lowest node number. Raises :class:`CaptureError` listing
-    everything it saw when only the built-in (or nothing) is present — the message is
+    everything it saw when only the built-in (or nothing) is present; the message is
     the troubleshooting output, so read it rather than guessing.
     """
     listing = list(devices) if devices is not None else list_video_devices(sys_dir)
@@ -204,7 +204,7 @@ def select_device(
 # ------------------------------------------------------------------ backends
 def _cv2_or_none() -> Any | None:
     try:
-        import cv2  # noqa: PLC0415 — optional backend, probed at call time
+        import cv2  # noqa: PLC0415, optional backend, probed at call time
     except ImportError:
         return None
     return cv2
@@ -213,7 +213,7 @@ def _cv2_or_none() -> Any | None:
 def choose_backend(preferred: str | None = None) -> str:
     """Resolve the still-capture backend: ``"cv2"`` or ``"ffmpeg"``.
 
-    ``preferred`` forces one (and errors if it is unavailable) — used by the CLI and by
+    ``preferred`` forces one (and errors if it is unavailable), used by the CLI and by
     the offline tests. Otherwise OpenCV wins when importable (in-process, no subprocess),
     with ffmpeg as the always-there fallback.
     """
@@ -246,7 +246,7 @@ def _default_out_path() -> Path:
 
 def _capture_cv2(device: str, out_path: Path, warmup_frames: int) -> None:
     cv2 = _cv2_or_none()
-    if cv2 is None:  # pragma: no cover — guarded by choose_backend
+    if cv2 is None:  # pragma: no cover, guarded by choose_backend
         raise CaptureError("opencv-python is not installed")
     cap = cv2.VideoCapture(device, cv2.CAP_V4L2)
     try:
@@ -279,7 +279,7 @@ def _capture_cv2(device: str, out_path: Path, warmup_frames: int) -> None:
 
 def _capture_ffmpeg(device: str, out_path: Path, warmup_frames: int) -> None:
     exe = shutil.which("ffmpeg")
-    if exe is None:  # pragma: no cover — guarded by choose_backend
+    if exe is None:  # pragma: no cover, guarded by choose_backend
         raise CaptureError("the ffmpeg binary is not on PATH")
     out_path.parent.mkdir(parents=True, exist_ok=True)
     cmd = [
@@ -294,7 +294,7 @@ def _capture_ffmpeg(device: str, out_path: Path, warmup_frames: int) -> None:
         cmd += ["-vf", f"select=gte(n\\,{int(warmup_frames)})", "-vsync", "0"]
     cmd += ["-frames:v", "1", str(out_path)]
     try:
-        proc = subprocess.run(  # noqa: S603 — fixed argv, no shell
+        proc = subprocess.run(  # noqa: S603, fixed argv, no shell
             cmd, capture_output=True, text=True, timeout=_FFMPEG_TIMEOUT_S, check=False
         )
     except subprocess.TimeoutExpired as e:
@@ -311,7 +311,7 @@ def _capture_ffmpeg(device: str, out_path: Path, warmup_frames: int) -> None:
 
         with Image.open(out_path) as im:
             _warn_if_unexpected_size(im.size)
-    except Exception:  # noqa: BLE001 — a size check must never fail the capture
+    except Exception:  # noqa: BLE001, a size check must never fail the capture
         pass
 
 
@@ -325,10 +325,10 @@ def capture_still(
     """Grab one still from a local V4L2 webcam and return the JPEG path.
 
     Args:
-        device: ``/dev/videoN``, an integer index (``4`` → ``/dev/video4``), or ``None``
+        device: ``/dev/videoN``, an integer index (``4`` -> ``/dev/video4``), or ``None``
             to auto-select via :func:`select_device` (built-in laptop cam excluded).
         out_path: destination; a temp ``overhead_*.jpg`` when ``None``.
-        warmup_frames: frames to discard before keeping one — webcam auto-exposure
+        warmup_frames: frames to discard before keeping one; webcam auto-exposure
             needs a moment or the first frame comes out black.
         backend: force ``"cv2"`` / ``"ffmpeg"`` (default: cv2 if importable, else ffmpeg).
 
@@ -368,17 +368,17 @@ def capture_twin_frame(
     source: str = "cloud",
     sensor_id: str | None = None,
 ) -> Path:
-    """Fetch the twin's latest frame through the Cyberwave SDK → JPEG path.
+    """Fetch the twin's latest frame through the Cyberwave SDK -> JPEG path.
 
     Uses the verified surface documented in this module's docstring, newest API first:
     ``twin.get_frame("path", path=..., source="cloud")``, then the deprecated
     ``twin.capture_frame`` / ``twin.get_latest_frame``, then
     ``client.twins.get_latest_frame(twin_id)``. ``source="cloud"`` is the REST
-    ``latest-frame`` endpoint — the one-shot call that does not depend on the flaky
+    ``latest-frame`` endpoint, the one-shot call that does not depend on the flaky
     dashboard stream; it is also the only source allowed under ``cw.affect("simulation")``.
 
     Raises:
-        CaptureError: the SDK returned no frame (sensor not streaming yet — mount the
+        CaptureError: the SDK returned no frame (sensor not streaming yet; mount the
             camera and start the streamer first, see hardware/config/cameras.md).
         NotImplementedError: the installed SDK exposes none of the four calls above;
             the message lists what it *does* expose so nobody has to guess an API name.

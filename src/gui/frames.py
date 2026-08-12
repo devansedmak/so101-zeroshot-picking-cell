@@ -3,7 +3,7 @@
 Two jobs, both of which must work with the network cable pulled out:
 
 1. **Serve** whatever frame the run is currently looking at (:class:`FrameStore` holds
-   JPEG *bytes* — never a path — so a real capture in ``/tmp`` that gets cleaned up
+   JPEG *bytes*, never a path, so a real capture in ``/tmp`` that gets cleaned up
    mid-demo cannot blank the page).
 2. **Synthesize** a convincing overhead scene when there is no real capture
    (:func:`synth_scene`), drawing the *real* calibrated zone rectangles from
@@ -66,7 +66,7 @@ def full_view(size: Sequence[int] = DEFAULT_FRAME_SIZE) -> View:
 
 
 def parse_view(spec: str) -> View:
-    """``"430,296,960,540"`` → :class:`View`."""
+    """``"430,296,960,540"`` -> :class:`View`."""
     parts = [p for p in str(spec).replace("x", ",").split(",") if p.strip()]
     if len(parts) != 4:
         raise ValueError(f"bad view {spec!r}: expected x,y,w,h")
@@ -129,11 +129,11 @@ def auto_view(
     *,
     extra: Sequence[Sequence[float]] = (),
 ) -> View:
-    """A 960×540 window centred on the action — the crop that makes the zones readable.
+    """A 960×540 window centred on the action: the crop that makes the zones readable.
 
     ``extra`` are additional points that must be framed (the mock passes the props'
     resting positions). Without them the window centres on the zones alone, which pushes
-    the pick area into a corner and wastes a third of the shot on empty table — on video
+    the pick area into a corner and wastes a third of the shot on empty table. On video
     that reads as "the interesting part is off-screen".
     """
     if not rects:
@@ -272,7 +272,7 @@ def encode_jpeg(img: Any, view: View | None = None) -> bytes:
         v = view.clamp_to((w, h))
         img = img[v.y : v.y + v.h, v.x : v.x + v.w]
     ok, buf = cv2.imencode(".jpg", img, [int(cv2.IMWRITE_JPEG_QUALITY), JPEG_QUALITY])
-    if not ok:  # pragma: no cover — cv2 only fails here on a corrupt array
+    if not ok:  # pragma: no cover, cv2 only fails here on a corrupt array
         raise RuntimeError("cv2.imencode failed")
     return bytes(buf.tobytes())
 
@@ -351,13 +351,13 @@ def _int(v: Any) -> int:
 
 
 def pixel_to_view_fraction(px: float, py: float, view: View) -> tuple[float, float]:
-    """Full-frame pixel → 0..1 position inside the served crop (what the page needs)."""
+    """Full-frame pixel -> 0..1 position inside the served crop (what the page needs)."""
     fx = (float(px) - view.x) / max(1.0, float(view.w))
     fy = (float(py) - view.y) / max(1.0, float(view.h))
     return fx, fy
 
 
 def jitter(x: float, y: float, radius: float, seed: int = 0) -> tuple[float, float]:
-    """A deterministic small offset — makes canned detections look measured, not typed."""
+    """A deterministic small offset: makes canned detections look measured, not typed."""
     a = (seed * 2.399963) % (2 * math.pi)
     return x + radius * math.cos(a), y + radius * math.sin(a)

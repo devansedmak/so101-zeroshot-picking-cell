@@ -1,8 +1,8 @@
 """Unit tests for zero-shot VLM detection parsing (pure, no network/credits).
 
-Validates the coordinate convention that the whole pick depends on — the VLM's
-``[y, x]`` order on a 0-1000 scale → source pixels — plus the fake-client wiring for
-``detect``. Run with PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 (see runbook).
+Validates the coordinate convention that the whole pick depends on: the VLM's
+``[y, x]`` order on a 0-1000 scale -> source pixels, plus the fake-client wiring for
+``detect``. Run with PYTEST_DISABLE_PLUGIN_AUTOLOAD=1.
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ from src.perception import (
 
 
 def test_point_is_yx_order_scaled_to_pixels():
-    # point [y=250, x=750] on 0-1000 → normalized (0.75, 0.25) → px on a 1000x400 frame
+    # point [y=250, x=750] on 0-1000 -> normalized (0.75, 0.25) -> px on a 1000x400 frame
     dets = parse_detections([{"point": [250, 750], "label": "red marker"}], 1000, 400)
     assert len(dets) == 1
     d = dets[0]
@@ -43,7 +43,7 @@ def test_out_of_range_coords_are_clamped():
     dets = parse_detections([{"point": [1200, -50]}], 800, 600)
     d = dets[0]
     assert 0.0 <= d.nx <= 1.0 and 0.0 <= d.ny <= 1.0
-    assert (d.nx, d.ny) == pytest.approx((0.0, 1.0))  # x=-50→0, y=1200→1000→1.0
+    assert (d.nx, d.ny) == pytest.approx((0.0, 1.0))  # x=-50 -> 0, y=1200 -> 1000 -> 1.0
 
 
 # --- robustness ----------------------------------------------------------
@@ -62,9 +62,9 @@ def test_default_label_used_when_missing():
 
 def test_malformed_entries_skipped_but_valid_kept():
     out = [
-        {"point": [500]},                 # too short → skipped
-        {"point": ["a", "b"]},            # non-numeric → skipped
-        {"nonsense": 1},                  # no spatial key → skipped
+        {"point": [500]},                 # too short -> skipped
+        {"point": ["a", "b"]},            # non-numeric -> skipped
+        {"nonsense": 1},                  # no spatial key -> skipped
         {"point": [500, 500], "label": "ok"},
     ]
     dets = parse_detections(out, 100, 100)

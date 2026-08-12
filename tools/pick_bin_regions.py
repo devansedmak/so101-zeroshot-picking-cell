@@ -2,7 +2,7 @@
 
 WHY: `src/perception/verify.py` decides "did the item land in bin A?" by testing
 whether the VLM's detected pixel falls inside bin A's rectangle. Bins don't move in a
-fixed overhead view, so those rectangles are **calibration data**, not perception —
+fixed overhead view, so those rectangles are **calibration data**, not perception,
 and `hardware/config/bin-regions.json` is the last missing input to the closed loop
 (`run_order._live_verifier` silently disables verification without it, which would
 quietly gut the demo's thesis).
@@ -17,7 +17,7 @@ before declaring success.
 
 Same shape as tools/calibrate_homography.py: interactive clicking, a non-interactive
 `--regions` path for when the display misbehaves, and `--selftest` that proves the
-whole write→reload→verdict path with no camera and no display.
+whole write -> reload -> verdict path with no camera and no display.
 
 CLI:
     .venv/bin/python tools/pick_bin_regions.py --selftest                  # offline proof
@@ -58,7 +58,7 @@ __all__ = [
 
 DEFAULT_OUT_PATH = REPO_ROOT / "hardware" / "config" / "bin-regions.json"
 
-# Labels MUST match the order source (src/wms_mock/orders.py posts {"bin": "A"}) —
+# Labels MUST match the order source (src/wms_mock/orders.py posts {"bin": "A"}):
 # run_order looks the region up by that exact string, so "Bin A" would not resolve.
 DEFAULT_BINS: tuple[str, ...] = ("A", "B", "C")
 
@@ -72,7 +72,7 @@ _NO_GUI_HINT = (
 
 # ------------------------------------------------------------------ parsing
 def parse_region_spec(spec: str) -> BinRegion:
-    """Parse ``"A=x0,y0,x1,y1"`` → :class:`BinRegion` (corner order is normalized)."""
+    """Parse ``"A=x0,y0,x1,y1"`` -> :class:`BinRegion` (corner order is normalized)."""
     text = spec.strip()
     for sep in ("=", ":"):
         if sep in text:
@@ -98,7 +98,7 @@ def parse_region_spec(spec: str) -> BinRegion:
 def regions_from_clicks(
     labels: Sequence[str], points: Sequence[tuple[float, float]]
 ) -> list[BinRegion]:
-    """Pair up 2 clicks per bin (any two opposite corners) → one rectangle per label."""
+    """Pair up 2 clicks per bin (any two opposite corners) -> one rectangle per label."""
     if len(points) != 2 * len(labels):
         raise ValueError(
             f"need exactly 2 clicks per bin: {len(labels)} bins → {2 * len(labels)} points, "
@@ -127,7 +127,7 @@ def write_and_verify(
     synthetic detection at each bin's centre: if a centre point does not verify as
     inside, the file is useless to the loop and this returns ``False``.
     Overlapping rectangles are reported as a WARNING (an item in the overlap would
-    verify for either bin) but do not block — a slightly loose box still ships.
+    verify for either bin) but do not block; a slightly loose box still ships.
     """
     print(f"[bins] {len(regions)} bin rectangles (pixels"
           + (f", frame {frame_size[0]}x{frame_size[1]}" if frame_size else "") + "):")
@@ -206,16 +206,16 @@ def _interactive_regions(
 
 
 def _image_size(image: str | Path) -> tuple[int, int] | None:
-    """(w, h) of the frame the rectangles were surveyed on — recorded in the JSON."""
+    """(w, h) of the frame the rectangles were surveyed on, recorded in the JSON."""
     try:
-        import cv2  # noqa: PLC0415 — optional; the size is metadata, not load-bearing
+        import cv2  # noqa: PLC0415, optional; the size is metadata, not load-bearing
 
         img = cv2.imread(str(image))
         if img is None:
             return None
         h, w = img.shape[:2]
         return (int(w), int(h))
-    except ImportError:  # pragma: no cover — opencv is a project dependency
+    except ImportError:  # pragma: no cover, opencv is a project dependency
         return None
 
 
@@ -236,7 +236,7 @@ def _grab_frame(device: str | None, warmup: int) -> Path:
 
 # ------------------------------------------------------------------ selftest
 def selftest() -> int:
-    """Prove parse → write → reload → verdict offline, on synthetic rectangles."""
+    """Prove parse -> write -> reload -> verdict offline, on synthetic rectangles."""
     print("=" * 72)
     print("SELFTEST tools/pick_bin_regions.py — synthetic rectangles, no camera/display")
     print("=" * 72)

@@ -1,12 +1,12 @@
-"""Shared SIMULATION connect + warm-up → a ready :class:`MotionExecutor`.
+"""Shared SIMULATION connect + warm-up -> a ready :class:`MotionExecutor`.
 
 Factored out of hello_sim so every sim entrypoint (hello_sim, the agent loop's
 run_order) connects the same, proven way: fetch the twin by ``CYBERWAVE_TWIN_ID``,
 pin the runtime to **simulation**, discover the twin's real joint names (our SO-101
-exposes ``_1``..``_6`` — see progress.md S4), warm up the controller, and hand back
+exposes ``_1``..``_6``), warm up the controller, and hand back
 an executor bound to that twin.
 
-SAFETY (CLAUDE.md rule 2): SIMULATION-ONLY by construction — this hard-codes
+SAFETY: SIMULATION-ONLY by construction. This hard-codes
 ``cw.affect("simulation")`` and offers no live path. Live hardware motion is a
 separate, explicitly-confirmed step and is intentionally not wired here.
 """
@@ -38,13 +38,13 @@ def open_sim_executor(twin_id: str, *, settle: float = 3.0) -> tuple[MotionExecu
     from cyberwave import Cyberwave
 
     cw = Cyberwave()
-    cw.affect("simulation")  # pin runtime to SIM — do not remove without a confirmed live plan
+    cw.affect("simulation")  # pin runtime to SIM; do not remove without a confirmed live plan
     print(f"[sim] runtime = simulation; fetching twin {twin_id} …")
 
     robot = cw.twin(twin_id=twin_id)
     print(f"[sim] twin ready: {getattr(robot, 'name', twin_id)}")
 
-    # Map canonical joint keys ("1".."6") → this twin's actual SDK joint names.
+    # Map canonical joint keys ("1".."6") -> this twin's actual SDK joint names.
     name_map: dict[str, str] = {}
     try:
         from cyberwave.twin.capabilities import controllable_joint_names
@@ -53,7 +53,7 @@ def open_sim_executor(twin_id: str, *, settle: float = 3.0) -> tuple[MotionExecu
         if len(actual) == len(JOINTS):
             name_map = dict(zip(JOINTS, actual))
             print(f"[sim] joint map: {name_map}")
-    except Exception as e:  # noqa: BLE001 — discovery is best-effort; fall back to identity
+    except Exception as e:  # noqa: BLE001, discovery is best-effort; fall back to identity
         print(f"[sim] joint-name discovery skipped ({e}); using canonical names")
 
     executor = MotionExecutor(robot, name_map=name_map)
@@ -62,7 +62,7 @@ def open_sim_executor(twin_id: str, *, settle: float = 3.0) -> tuple[MotionExecu
         print(f"[sim] warming up controller ({settle:.0f}s settle) …")
         try:
             executor._snap_to({j: 0.0 for j in JOINTS})
-        except Exception as e:  # noqa: BLE001 — first command may be lost by design
+        except Exception as e:  # noqa: BLE001, first command may be lost by design
             print(f"[sim] warm-up command note: {e}")
         time.sleep(settle)
 

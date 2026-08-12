@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
-"""Demo dashboard for the order-driven picking cell — the thing the camera films.
+"""Demo dashboard for the order-driven picking cell: the thing the camera films.
 
     .venv/bin/python tools/dashboard.py                 # MOCK (default): no network, no hardware
     .venv/bin/python tools/dashboard.py --mode fusion   # start in a different mode
     .venv/bin/python tools/dashboard.py --follow run-events.jsonl --runtime simulation
 
-One stdlib ``http.server`` process (same call as ``src.agent_service.order_api``, D16),
-one self-contained HTML page, no CDN and no external asset — it renders with the network
+One stdlib ``http.server`` process (same call as ``src.agent_service.order_api``),
+one self-contained HTML page, no CDN and no external asset; it renders with the network
 cable pulled out. The bare command is the fallback demo: a scripted run drives every
 stage, every mode and all four motion states with nothing plugged in.
 
-**Safety (CLAUDE.md rule 2).** This is a *viewer*. It never imports
+**Safety.** This is a *viewer*. It never imports
 ``control.live_session``, never opens a serial port and never calls ``cw.affect("live")``;
 ``--runtime live`` only changes an alert's ``source_type`` to "edge" and the header badge.
 Nothing here can move the robot.
@@ -20,7 +20,7 @@ the zone rectangles come from the surveyed ``hardware/config/bin-regions.json``,
 millimetres come from the calibrated ``hardware/config/homography.json``, the routing goes
 through the same ``src.gui.modes.route`` a live run uses, and the verification verdict is
 the same point-in-rectangle test as ``perception.verify``. Alerts in mock mode are shown
-and **never sent** — every card is stamped "MOCK — not sent".
+and **never sent**: every card is stamped "MOCK — not sent".
 
 **Real runs.** ``--follow PATH`` tails a JSONL event file instead of scripting one. To get
 that file from an actual ``run_order`` execution without editing it (see ``src.gui.emit``)::
@@ -140,7 +140,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def resolve_view(args: argparse.Namespace) -> tuple[F.View | None, bool]:
-    """``(explicit view, auto_view)`` — an explicit --view always wins."""
+    """``(explicit view, auto_view)``: an explicit --view always wins."""
     if args.view:
         return F.parse_view(args.view), False
     return None, not args.full_view
@@ -187,7 +187,7 @@ def attach_source(app: DashboardApp, args: argparse.Namespace) -> threading.Even
         try:
             app.frames.set_path(args.frame, token="backdrop")
             print(f"[dashboard] backdrop: {args.frame}")
-        except Exception as e:  # noqa: BLE001 — a bad backdrop must not stop the server
+        except Exception as e:  # noqa: BLE001, a bad backdrop must not stop the server
             print(f"[dashboard] ⚠ could not read --frame {args.frame}: {e}")
     elif args.follow:
         found = F.find_real_frame()
@@ -304,7 +304,7 @@ def self_test(app: DashboardApp, args: argparse.Namespace) -> int:
     # Assert on the POST's own response, NOT on a following GET /state: when --mock is
     # running, its script emits a `reset` carrying the mock's mode (src/gui/mock.py) on
     # every loop, so a reset landing between the POST and the GET reverts `state.mode`
-    # and the check fails — observed roughly 1 run in 4. That is a race in the check,
+    # and the check fails, observed roughly 1 run in 4. That is a race in the check,
     # not a defect in set_mode, and re-reading shared state that a live producer is
     # concurrently writing can never be made reliable. The POST response is the
     # authoritative result of the call under test.

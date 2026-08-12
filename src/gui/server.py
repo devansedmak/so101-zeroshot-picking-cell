@@ -1,17 +1,17 @@
-"""The dashboard's HTTP surface — **standard library only**, same call as ``order_api``.
+"""The dashboard's HTTP surface: **standard library only**, same call as ``order_api``.
 
 No FastAPI, no CDN, no external asset: one process, one port, and a page that renders
-with the network cable pulled out (D16 / CLAUDE.md rule 6). The handler is deliberately
-thin — it parses, delegates to :class:`src.gui.app.DashboardApp`, and serializes.
+with the network cable pulled out. The handler is deliberately
+thin: it parses, delegates to :class:`src.gui.app.DashboardApp`, and serializes.
 
 Routes:
-    GET  /            → the single self-contained HTML page
-    GET  /state       → the whole document the page polls (JSON)
-    GET  /frame.jpg   → the current overhead frame (JPEG bytes, never cached)
-    GET  /health      → {"status": "ok", ...} for a curl smoke test
-    POST /events      → feed events in: one dict, a list, or {"events": [...]}
-    POST /mode        → {"mode": "order"|"qc"|"fusion"}
-    POST /replay      → {"outcome": "auto"|"ok"|"retry"|"fail"} (mock only)
+    GET  /            -> the single self-contained HTML page
+    GET  /state       -> the whole document the page polls (JSON)
+    GET  /frame.jpg   -> the current overhead frame (JPEG bytes, never cached)
+    GET  /health      -> {"status": "ok", ...} for a curl smoke test
+    POST /events      -> feed events in: one dict, a list, or {"events": [...]}
+    POST /mode        -> {"mode": "order"|"qc"|"fusion"}
+    POST /replay      -> {"outcome": "auto"|"ok"|"retry"|"fail"} (mock only)
 
 Nothing here can move the robot: the dashboard is a viewer. The only writes it performs
 are into its own in-memory state.
@@ -30,7 +30,7 @@ from .page import render_page
 
 SERVICE = "picking-cell-dashboard"
 
-#: A frame POST carries a path, not pixels; an event batch is small. Refuse the absurd.
+#: A frame POST carries a path, not pixels; an event batch is small. Refuse anything bigger.
 MAX_BODY_BYTES = 1024 * 1024
 
 ROUTES: dict[str, list[str]] = {
@@ -63,7 +63,7 @@ def make_handler(app: Any, *, quiet: bool = True) -> type[BaseHTTPRequestHandler
         server_version = f"{SERVICE}/1.0"
 
         # --- routing ----------------------------------------------------
-        def do_GET(self) -> None:  # noqa: N802 — stdlib naming
+        def do_GET(self) -> None:  # noqa: N802, stdlib naming
             path = self._path()
             if path in ("/", "/index.html"):
                 self._bytes(HTTPStatus.OK, render_page(), "text/html; charset=utf-8")
@@ -80,7 +80,7 @@ def make_handler(app: Any, *, quiet: bool = True) -> type[BaseHTTPRequestHandler
             else:
                 self._reject(path, "GET")
 
-        def do_POST(self) -> None:  # noqa: N802 — stdlib naming
+        def do_POST(self) -> None:  # noqa: N802, stdlib naming
             raw = self._read_body()  # always drain first (HTTP/1.1 keep-alive)
             if raw is None:
                 return
@@ -99,7 +99,7 @@ def make_handler(app: Any, *, quiet: bool = True) -> type[BaseHTTPRequestHandler
                 mode = (data or {}).get("mode") if isinstance(data, dict) else None
                 try:
                     self._json(HTTPStatus.OK, {"mode": app.set_mode(mode)})
-                except Exception as e:  # noqa: BLE001 — a bad mode is a 422, not a 500
+                except Exception as e:  # noqa: BLE001, a bad mode is a 422, not a 500
                     self._json(HTTPStatus.UNPROCESSABLE_ENTITY, {"error": str(e)})
             else:
                 outcome = (data or {}).get("outcome") if isinstance(data, dict) else None
@@ -109,7 +109,7 @@ def make_handler(app: Any, *, quiet: bool = True) -> type[BaseHTTPRequestHandler
         def _frame(self) -> None:
             try:
                 jpeg, token = app.frame_jpeg()
-            except Exception as e:  # noqa: BLE001 — no cv2 / no frame must not 500 the page
+            except Exception as e:  # noqa: BLE001, no cv2 / no frame must not 500 the page
                 self._json(HTTPStatus.SERVICE_UNAVAILABLE, {"error": f"no frame: {e}"})
                 return
             if not jpeg:
@@ -178,7 +178,7 @@ def make_handler(app: Any, *, quiet: bool = True) -> type[BaseHTTPRequestHandler
             except (BrokenPipeError, ConnectionResetError):  # browser navigated away
                 pass
 
-        def log_message(self, fmt: str, *args: Any) -> None:  # noqa: ANN401 — stdlib signature
+        def log_message(self, fmt: str, *args: Any) -> None:  # noqa: ANN401, stdlib signature
             if not quiet:
                 print(f"[dashboard] {fmt % args}", flush=True)
 

@@ -4,10 +4,10 @@ This is the walking-skeleton smoke test for the control layer. It connects to
 Cyberwave, pins the runtime to **simulation** (``cw.affect("simulation")``), fetches
 our calibrated twin by ``CYBERWAVE_TWIN_ID``, and runs a short, clamped, ramped
 demo plan through :class:`MotionExecutor`. Watch the digital twin move in the
-dashboard — no servos are written.
+dashboard. No servos are written.
 
-SAFETY (CLAUDE.md rule 2): this script is **simulation-only by construction** —
-it hard-codes ``affect("simulation")`` and has no live path. ``--dry-run`` goes
+SAFETY: this script is **simulation-only by construction**.
+It hard-codes ``affect("simulation")`` and has no live path. ``--dry-run`` goes
 further and issues no SDK calls at all (prints the plan and exits). Live hardware
 motion is a separate, explicitly-confirmed step and is intentionally not wired here.
 

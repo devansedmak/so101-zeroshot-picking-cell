@@ -2,7 +2,7 @@
 
 One direction of data flow: *producers* (the mock driver, or a real ``run_order`` run via
 :mod:`src.gui.emit`) append **events**; :class:`DashboardState` folds them into the single
-JSON document the browser polls. The page itself is dumb — it only draws
+JSON document the browser polls. The page itself is dumb: it only draws
 ``DashboardState.to_dict()``.
 
 An event is a plain JSON dict with a ``kind``:
@@ -40,7 +40,7 @@ from .modes import DEFAULT_MODE, MODE_BLURB, ZONES, QCVerdict, check_mode, zone_
 #: The pipeline, left to right, exactly as the video should read.
 STAGES: tuple[str, ...] = ("ORDER", "DETECT", "LOCATE", "PICK", "PLACE", "VERIFY", "ALERT")
 
-#: What each stage *is*, in one line — printed under the chip so a viewer needs no narration.
+#: What each stage *is*, in one line, printed under the chip so a viewer needs no narration.
 STAGE_BLURB: dict[str, str] = {
     "ORDER": "webhook POST /orders",
     "DETECT": "hosted VLM · detect_points",
@@ -55,7 +55,7 @@ STAGE_STATES: tuple[str, ...] = ("idle", "active", "done", "failed", "skipped")
 
 # ---------------------------------------------------------------- motion honesty
 # The stages that actually command servos. Everything else is compute, and compute
-# either returned a value or it didn't — there is nothing to "confirm".
+# either returned a value or it didn't; there is nothing to "confirm".
 MOTION_STAGES: tuple[str, ...] = ("PICK", "PLACE")
 
 #: The FOUR states a commanded move can be in. Two would be a lie.
@@ -64,13 +64,13 @@ MOTION_STAGES: tuple[str, ...] = ("PICK", "PLACE")
 #: publishes to MQTT and prints "plan complete" with **no servo acknowledgement**: the
 #: edge driver had lost its serial binding, so every command "succeeded" while the arm
 #: stood still. ``control.live_session.verify_pose`` closed that gap (it returns
-#: ``{joint: error_deg}`` for joints outside tolerance, empty ⇒ all good, and *raises*
+#: ``{joint: error_deg}`` for joints outside tolerance, empty means all good, and *raises*
 #: when there is no telemetry at all). This vocabulary is that helper's three answers
-#: plus the state before it has answered — and the page must render all four
+#: plus the state before it has answered, and the page must render all four
 #: differently, because "commanded" looking like "verified" IS the bug.
 MOTION_STATES: tuple[str, ...] = ("commanded", "verified", "mismatch", "unverified")
 
-#: state → (short label, one-line meaning, "good"|"warn"|"bad")
+#: state -> (short label, one-line meaning, "good"|"warn"|"bad")
 MOTION_MEANING: dict[str, tuple[str, str, str]] = {
     "commanded": (
         "COMMANDED",
@@ -113,7 +113,7 @@ def _num(value: Any, default: float = 0.0) -> float:
 
 
 def _point(value: Any) -> list[float] | None:
-    """``[x, y]``-ish → ``[x, y]`` floats, or ``None``."""
+    """``[x, y]``-ish -> ``[x, y]`` floats, or ``None``."""
     if isinstance(value, Mapping):
         value = [value.get("x"), value.get("y")]
     if not isinstance(value, (list, tuple)) or len(value) < 2:
@@ -150,7 +150,7 @@ def motion_report(
             drift[str(joint)] = round(float(value), 2)
         except (TypeError, ValueError):
             continue
-    if drift and st == "verified":  # telemetry disagreed — it is NOT verified.
+    if drift and st == "verified":  # telemetry disagreed, so it is NOT verified.
         st = "mismatch"
     label, meaning, tone = MOTION_MEANING[st]
     worst = max((abs(v) for v in drift.values()), default=0.0)
@@ -171,7 +171,7 @@ def motion_report(
 
 
 def motion_summary(errors: Mapping[str, float]) -> str:
-    """``{"elbow": 7.4}`` → ``"elbow +7.4°"`` — the per-joint error, worst first."""
+    """``{"elbow": 7.4}`` -> ``"elbow +7.4°"``: the per-joint error, worst first."""
     items = sorted(errors.items(), key=lambda kv: -abs(kv[1]))
     return " · ".join(f"{j} {v:+.1f}°" for j, v in items)
 
@@ -205,7 +205,7 @@ class DashboardState:
     """Everything the page draws. Folded from events; JSON-safe via :meth:`to_dict`."""
 
     mode: str = DEFAULT_MODE
-    source: str = "mock"  # "mock" | "live" — shown as a badge, never guessed by the page
+    source: str = "mock"  # "mock" | "live": shown as a badge, never guessed by the page
     stages: dict[str, StageState] = field(default_factory=dict)
     order: dict[str, Any] | None = None
     detection: dict[str, Any] | None = None
@@ -226,7 +226,7 @@ class DashboardState:
     updated: float = field(default_factory=_now)
     run_id: int = 0
 
-    #: Keep the log bounded — a dashboard left running all evening must not eat RAM.
+    #: Keep the log bounded: a dashboard left running all evening must not eat RAM.
     log_limit: int = 60
 
     def __post_init__(self) -> None:
@@ -276,7 +276,7 @@ class DashboardState:
             return False
         try:
             handler(event)
-        except Exception:  # noqa: BLE001 — a bad event must never kill the dashboard
+        except Exception:  # noqa: BLE001, a bad event must never kill the dashboard
             self.dropped += 1
             return False
         self.seq += 1
@@ -411,7 +411,7 @@ class DashboardState:
             "alert_type": str(e.get("alert_type") or ""),
             "dispatched": bool(e.get("dispatched", True)),
             # Who raised it. Anything other than the dashboard itself (e.g. "run_order")
-            # means the producer already owns the platform call — see app._dispatch_alert.
+            # means the producer already owns the platform call. See app._dispatch_alert.
             "origin": str(e.get("origin") or "dashboard"),
             "t": _num(e.get("t"), _now()),
         }
@@ -447,7 +447,7 @@ class DashboardState:
 
     # ------------------------------------------------------------------ output
     def motion_panel(self) -> list[dict[str, Any]]:
-        """One row per servo-commanding stage — the "did it actually move?" panel.
+        """One row per servo-commanding stage: the "did it actually move?" panel.
 
         A stage that has never been commanded reports ``state: null`` (an empty slot),
         which is different from every one of the four post-command states.
@@ -528,7 +528,7 @@ def motion_event(
     """Build a motion-confirmation event (see :data:`MOTION_STATES`).
 
     ``errors`` is exactly what ``control.live_session.verify_pose`` returns:
-    ``{joint: error_deg}``, empty ⇒ every joint landed inside ``tolerance_deg``.
+    ``{joint: error_deg}``, empty means every joint landed inside ``tolerance_deg``.
     """
     return ev(
         "motion",

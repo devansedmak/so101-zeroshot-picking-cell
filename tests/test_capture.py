@@ -2,18 +2,18 @@
 
 The hardware window is ~15 minutes long, so everything that can be checked without the
 camera plugged in is checked here: which /dev/videoN gets picked (the built-in Acer lid
-camera must NEVER win — a lid camera cannot be fixed relative to the table, so the
+camera must NEVER win: a lid camera cannot be fixed relative to the table, so the
 planar homography would drift), which backend is chosen, and that failures raise a
 readable :class:`CaptureError` instead of returning a black frame.
 
 Device enumeration is driven by a **fake /sys/class/video4linux tree** (tmp_path) so the
-selection logic is testable with nothing plugged in — that injection point is why
+selection logic is testable with nothing plugged in; that injection point is why
 ``list_video_devices``/``select_device`` take a ``sys_dir``.
 
 Also covers the non-interactive parsing and the PASS/FAIL-and-refuse behaviour of
 tools/calibrate_homography.py and tools/pick_bin_regions.py, plus both tools'
 ``--selftest`` paths, so a green suite tonight means tomorrow is mechanical.
-Run with PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 (see runbook).
+Run with PYTEST_DISABLE_PLUGIN_AUTOLOAD=1.
 """
 
 from __future__ import annotations
@@ -102,7 +102,7 @@ def test_prefers_capture_node_over_metadata_node(tmp_path):
 
 
 def test_unknown_camera_name_is_still_eligible(tmp_path):
-    # An unrecognized name must never block the demo — only the built-in is excluded.
+    # An unrecognized name must never block the demo; only the built-in is excluded.
     root = make_sysfs(
         tmp_path, {"video0": (ACER_BUILTIN, 0), "video4": ("Some Unbranded Cam", 0)}
     )
@@ -213,7 +213,7 @@ def test_capture_still_ffmpeg_nonzero_exit_is_an_error(tmp_path, monkeypatch):
 
 
 def test_capture_still_bad_device_raises_captureerror(tmp_path):
-    """Real backend, absent device — the tomorrow-morning 'wrong node' failure."""
+    """Real backend, absent device: the tomorrow-morning 'wrong node' failure."""
     backend = "cv2" if _cv2_available() else "ffmpeg"
     with pytest.raises(CaptureError):
         capture_still("/dev/video-definitely-not-a-camera", tmp_path / "n.jpg", 0,
@@ -272,7 +272,7 @@ def test_capture_twin_frame_none_means_not_streaming(tmp_path):
 
 def test_capture_twin_frame_unknown_sdk_lists_what_it_found(tmp_path):
     class _Bare:
-        def hello(self):  # pragma: no cover — only its name is asserted on
+        def hello(self):  # pragma: no cover, only its name is asserted on
             return None
 
     with pytest.raises(NotImplementedError, match="hello"):
@@ -324,7 +324,7 @@ def test_parse_points_file_rejects_short_rows(tmp_path):
 
 def test_sheet_world_points_is_a4_in_click_order():
     assert calib.sheet_world_points(297, 210) == [
-        (0.0, 0.0),  # origin corner — goes at the arm base
+        (0.0, 0.0),  # origin corner, goes at the arm base
         (297.0, 0.0),
         (297.0, 210.0),
         (0.0, 210.0),
@@ -337,7 +337,7 @@ def test_sheet_world_points_is_a4_in_click_order():
 
 
 def _clean_pairs() -> list[tuple[tuple[float, float], tuple[float, float]]]:
-    """world = 2*pixel mm — a clean, exactly-fittable calibration."""
+    """world = 2*pixel mm: a clean, exactly-fittable calibration."""
     pix = [(0.0, 0.0), (200.0, 0.0), (200.0, 200.0), (0.0, 200.0), (100.0, 100.0)]
     return [(p, (2 * p[0], 2 * p[1])) for p in pix]
 
@@ -489,7 +489,7 @@ def test_parse_region_spec_rejects_junk(spec):
 
 def test_default_bin_labels_match_the_order_source():
     # src/wms_mock/orders.py posts {"bin": "A"} and run_order looks the region up by
-    # that exact string — "Bin A" would silently disable verification.
+    # that exact string; "Bin A" would silently disable verification.
     assert bins.DEFAULT_BINS == ("A", "B", "C")
 
 

@@ -1,11 +1,11 @@
-"""Unit tests for the pick-target locator: capture → detect → homography → table mm.
+"""Unit tests for the pick-target locator: capture -> detect -> homography -> table mm.
 
 Fully offline: a fake VLM client (duck-types ``cw.mlmodels``, zero credits), a homography
-fitted from known correspondences, and no camera — capture is monkeypatched, or bypassed
-entirely by handing in a saved frame. The pixel→mm numbers are asserted against the
+fitted from known correspondences, and no camera: capture is monkeypatched, or bypassed
+entirely by handing in a saved frame. The pixel -> mm numbers are asserted against the
 affine map computed **by hand** from the correspondences (``_expected_table_mm``), not
 against whatever the code returns, so a sign flip or a [y, x] swap fails here.
-Run with PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 (see runbook).
+Run with PYTEST_DISABLE_PLUGIN_AUTOLOAD=1.
 """
 
 from __future__ import annotations
@@ -46,7 +46,7 @@ def _homography() -> Homography:
 class FakeVLM:
     """Offline stand-in for the hosted VLM: replays canned output, records the call.
 
-    Satisfies the only surface ``detect`` uses (``mlmodels.run``) — no network, no credits.
+    Satisfies the only surface ``detect`` uses (``mlmodels.run``), so no network, no credits.
     """
 
     def __init__(self, output=None) -> None:
@@ -62,11 +62,11 @@ class FakeVLM:
         return self
 
 
-# --- the happy path: detection → pixel → table mm ------------------------
+# --- the happy path: detection -> pixel -> table mm ----------------------
 
 
 def test_locate_item_maps_the_detection_to_the_right_table_mm():
-    # VLM answers [y, x] on a 0..1000 grid (D15) ⇒ px = (0.75·640, 0.25·480).
+    # VLM answers [y, x] on a 0..1000 grid, so px = (0.75*640, 0.25*480).
     client = FakeVLM([{"point": [250, 750], "label": "red marker"}])
     located = locate_item(
         "red marker",
@@ -158,7 +158,7 @@ def test_locate_item_raises_item_not_found_when_nothing_usable_comes_back(output
 
 
 def test_supplied_image_bypasses_capture_entirely(monkeypatch):
-    def boom(*a, **k):  # pragma: no cover — must never run
+    def boom(*a, **k):  # pragma: no cover, must never run
         raise AssertionError("capture_still must not be called when image= is given")
 
     monkeypatch.setattr("src.perception.capture.capture_still", boom)
@@ -202,7 +202,7 @@ def test_frame_size_is_read_from_a_real_frame_when_not_given(tmp_path):
     cv2.imwrite(str(frame), numpy.zeros((IMG_H, IMG_W, 3), numpy.uint8))
 
     assert frame_size(frame) == (IMG_W, IMG_H)
-    located = locate_item(  # no image_size ⇒ probed from the file
+    located = locate_item(  # no image_size, so it is probed from the file
         "red marker",
         client=FakeVLM([{"point": [250, 750], "label": "red marker"}]),
         homography=_homography(),
@@ -261,7 +261,7 @@ def test_locate_item_reports_the_object_axis_in_table_degrees(tmp_path):
 
     # Ground truth derived from the correspondences, not from the code: this calibration
     # scales x and y differently (100 mm / 640 px vs 200 mm / 480 px), so a 30° bar in
-    # pixels is NOT 30° on the table — which is exactly why the angle is taken after
+    # pixels is NOT 30° on the table, which is exactly why the angle is taken after
     # projecting both endpoints.
     sx, sy = 100.0 / IMG_W, 200.0 / IMG_H
     expected = math.degrees(
@@ -273,7 +273,7 @@ def test_locate_item_reports_the_object_axis_in_table_degrees(tmp_path):
 
 
 def test_a_frame_with_no_measurable_axis_still_locates_the_item():
-    # The stub frame here is never even decodable — orientation must degrade to None
+    # The stub frame here is never even decodable; orientation must degrade to None
     # instead of raising, leaving today's fixed-roll behaviour intact.
     located = locate_item(
         "red marker",
@@ -295,7 +295,7 @@ def test_load_homography_missing_says_how_to_fix_it(tmp_path):
     with pytest.raises(HomographyMissing) as excinfo:
         load_homography(tmp_path / "homography.json")
     message = str(excinfo.value)
-    assert "calibrate_homography" in message  # the message IS the runbook step
+    assert "calibrate_homography" in message  # the message IS the fix instruction
 
 
 def test_load_homography_round_trip_feeds_locate(tmp_path):

@@ -1,17 +1,17 @@
 """Zero-shot open-vocab detection via the Cyberwave-hosted VLM (Gemini Robotics-ER).
 
-This is the perception half of the loop seam (decisions.md D10/D13): given an overhead
+This is the perception half of the loop seam: given an overhead
 frame + an item name from the order, ask the hosted VLM to *point* at the item, and
-return the pixel location that will feed planar homography → table coords → IK.
+return the pixel location that will feed planar homography -> table coords -> IK.
 
 Real SDK surface (verified against cyberwave.mlmodels in S5):
     result = cw.mlmodels.run(model, image=<path|bytes|PIL>, prompt="red marker",
                              structured_task="detect_points")
-    result.output == [{"point": [y, x], "label": "..."}]   # ⚠ [y, x] order, 0-1000 scale
-  detect_boxes → [{"box_2d": [ymin, xmin, ymax, xmax], "label": "..."}]  (also 0-1000).
+    result.output == [{"point": [y, x], "label": "..."}]   # NOTE: [y, x] order, 0-1000 scale
+  detect_boxes -> [{"box_2d": [ymin, xmin, ymax, xmax], "label": "..."}]  (also 0-1000).
 
 The network call and the parsing are split so the parser is unit-testable with mocked
-VLM output (no credits, no network) — the pipeline's #1 risk validated offline. The
+VLM output (no credits, no network): the pipeline's #1 risk validated offline. The
 [y, x] / 0-1000 convention is encoded **once**, here, so nothing downstream re-derives it.
 """
 
@@ -62,7 +62,7 @@ def _unwrap(output: Any) -> list[dict[str, Any]]:
     """Coerce a VLM ``output`` into a list of item dicts.
 
     The backend returns either a bare list or a single-key wrapper like
-    ``{"points": [...]}`` / ``{"detections": [...]}`` — unwrap the latter.
+    ``{"points": [...]}`` / ``{"detections": [...]}``, so unwrap the latter.
     """
     if output is None:
         return []
@@ -141,11 +141,11 @@ def detect(
     image_size: tuple[int, int],
     task: str = TASK_POINTS,
 ) -> list[Detection]:
-    """Run the hosted VLM on ``image`` for ``item`` → pixel Detections.
+    """Run the hosted VLM on ``image`` for ``item`` -> pixel Detections.
 
     ``client`` only needs ``mlmodels.run(...)`` (a fake satisfies it offline).
     ``image`` is anything the SDK accepts (path / bytes / PIL). ``image_size`` is
-    (width, height) in px — required to convert the VLM's 0..1000 coords to pixels.
+    (width, height) in px, required to convert the VLM's 0..1000 coords to pixels.
     """
     result = client.mlmodels.run(model, image=image, prompt=item, structured_task=task)
     if getattr(result, "is_queued", None) and result.is_queued():

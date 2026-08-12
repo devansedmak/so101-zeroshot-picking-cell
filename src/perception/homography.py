@@ -1,16 +1,16 @@
-"""Planar homography — camera pixels → flat table coordinates (mm).
+"""Planar homography: camera pixels -> flat table coordinates (mm).
 
-The second half of the loop seam (decisions.md D5/D11): the VLM points at an item in
+The second half of the loop seam: the VLM points at an item in
 pixels (src/perception/detect.py), and this maps that pixel to a real (X, Y) on the
 table plane, which IK then turns into a pick pose. Valid because the scene is planar
-(fixed overhead camera, no depth sensor — D5).
+(fixed overhead camera, no depth sensor).
 
 Math is a Direct Linear Transform with Hartley isotropic normalization (numerically
-stable on real, noisy calibration clicks). Pure numpy — no camera, no SDK — so it's
+stable on real, noisy calibration clicks). Pure numpy (no camera, no SDK), so it's
 fully unit-testable offline; only the actual 4+ point calibration needs the mounted
 camera. Ship bar: reprojection error < 2 cm (cameras.md checkpoint criterion).
 
-Convention: ``H`` maps homogeneous pixel [x, y, 1] → homogeneous table [X, Y, 1] up to
+Convention: ``H`` maps homogeneous pixel [x, y, 1] -> homogeneous table [X, Y, 1] up to
 scale; ``project`` does the perspective divide. Calibrate in whatever world unit you
 measure (we use **mm**); the map is unit-agnostic.
 """
@@ -64,14 +64,14 @@ def _normalization_matrix(pts: np.ndarray) -> np.ndarray:
 
 @dataclass(frozen=True)
 class Homography:
-    """A fitted pixel→table planar homography (3×3, homogeneous)."""
+    """A fitted pixel -> table planar homography (3×3, homogeneous)."""
 
     H: np.ndarray
 
     # ------------------------------------------------------------------ fit
     @classmethod
     def fit(cls, pixel_pts: Iterable[Point], world_pts: Iterable[Point]) -> "Homography":
-        """Solve for the homography from ≥4 (pixel → world) correspondences.
+        """Solve for the homography from ≥4 (pixel -> world) correspondences.
 
         Raises ``ValueError`` on too few points, mismatched counts, or a degenerate
         (e.g. collinear) configuration that has no unique solution.
@@ -100,7 +100,7 @@ class Homography:
             raise ValueError("degenerate configuration (e.g. collinear points): no unique homography")
         h_norm = vh[-1].reshape(3, 3)
 
-        # Undo normalization: H = T_dst⁻¹ · H_norm · T_src.
+        # Undo normalization: H = inv(T_dst) * H_norm * T_src.
         H = np.linalg.inv(t_dst) @ h_norm @ t_src
         if abs(H[2, 2]) < _EPS:
             raise ValueError("degenerate homography (H[2,2] ≈ 0)")
@@ -108,7 +108,7 @@ class Homography:
 
     # -------------------------------------------------------------- project
     def project(self, xy: Point) -> tuple[float, float]:
-        """Map one pixel (x, y) → table (X, Y) with the perspective divide."""
+        """Map one pixel (x, y) -> table (X, Y) with the perspective divide."""
         x, y = float(xy[0]), float(xy[1])
         v = self.H @ np.array([x, y, 1.0])
         if abs(v[2]) < _EPS:
@@ -116,7 +116,7 @@ class Homography:
         return float(v[0] / v[2]), float(v[1] / v[2])
 
     def project_many(self, pts: Iterable[Point]) -> np.ndarray:
-        """Vectorized :meth:`project` → (N, 2) array of table coords."""
+        """Vectorized :meth:`project` -> (N, 2) array of table coords."""
         arr = _as_array(pts, "pts")
         hom = np.column_stack([arr, np.ones(len(arr))]) @ self.H.T
         w = hom[:, 2:3]
@@ -125,7 +125,7 @@ class Homography:
         return hom[:, :2] / w
 
     def inverse(self) -> "Homography":
-        """The reverse map (table → pixel) — handy for verification overlays."""
+        """The reverse map (table -> pixel), handy for verification overlays."""
         inv = np.linalg.inv(self.H)
         return Homography(inv / inv[2, 2])
 

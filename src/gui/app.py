@@ -1,12 +1,12 @@
 """The dashboard application object: state + frames + platform link, behind one lock.
 
-The HTTP layer (:mod:`src.gui.server`) is deliberately thin — every decision lives here so
+The HTTP layer (:mod:`src.gui.server`) is deliberately thin: every decision lives here so
 it can be exercised in tests without a socket. Two producers feed the same door:
 
     MockDriver.play(beat)                     # canned demo
-    POST /events  →  app.ingest([...])        # a real run_order execution
+    POST /events  ->  app.ingest([...])       # a real run_order execution
 
-and one consumer reads :meth:`snapshot`, which is the exact JSON the page renders —
+and one consumer reads :meth:`snapshot`, which is the exact JSON the page renders,
 including the **overlay geometry** (zone rectangles, the detected point, the verification
 point) already projected into the served crop, so the browser does no coordinate maths.
 """
@@ -75,13 +75,13 @@ class DashboardApp:
         return {"applied": applied, "seq": self.state.seq, "dropped": self.state.dropped}
 
     def _frame_from_event(self, event: Mapping[str, Any]) -> None:
-        """``{"kind":"frame","path":...}`` from a real run → load the bytes now."""
+        """``{"kind":"frame","path":...}`` from a real run -> load the bytes now."""
         path = event.get("path")
         if not path:
             return
         try:
             self.frames.set_path(path, token=str(event.get("token") or ""))
-        except Exception:  # noqa: BLE001 — a vanished /tmp capture must not blank the page
+        except Exception:  # noqa: BLE001, a vanished /tmp capture must not blank the page
             pass
 
     def _dispatch_alert(self, index: int) -> None:
@@ -108,7 +108,7 @@ class DashboardApp:
         self.platform.send(alert, done)
 
     def play(self, beat: Any) -> None:
-        """Execute one :class:`src.gui.mock.Beat` — render its frame, apply its events."""
+        """Execute one :class:`src.gui.mock.Beat`: render its frame, apply its events."""
         if getattr(beat, "frame", None) is not None:
             self.render(**{k: v for k, v in beat.frame.items() if v is not None})
         self.ingest(beat.events)
@@ -118,7 +118,7 @@ class DashboardApp:
         try:
             img = F.synth_scene(rects=self.rects, size=self.frame_size, **scene)
             self.frames.set_image(img)
-        except Exception:  # noqa: BLE001 — no cv2 / bad kwargs must not stop the demo
+        except Exception:  # noqa: BLE001, no cv2 / bad kwargs must not stop the demo
             pass
 
     def set_mode(self, mode: str) -> str:

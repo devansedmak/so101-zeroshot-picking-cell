@@ -2,13 +2,13 @@
 
 There is no hardware in the loop here, so the proof that rotation-invariant grasping
 works is this file: frames are **synthesised** with a filled rotated rectangle whose
-angle we chose, and the module must recover that angle — on a white calibration sheet
+angle we chose, and the module must recover that angle, on a white calibration sheet
 AND on a coloured paper zone, including the case where object and background have the
 same *luminance* and differ only in colour (which is precisely why the segmentation is
 colour-distance based and not a grey threshold).
 
 Angles are compared modulo 180° throughout: an axis has no head or tail.
-Run with PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 (see runbook).
+Run with PYTEST_DISABLE_PLUGIN_AUTOLOAD=1.
 """
 
 from __future__ import annotations
@@ -26,16 +26,16 @@ cv2 = pytest.importorskip("cv2")
 IMG_W, IMG_H = 400, 400
 CENTER = (200.0, 200.0)
 
-WHITE_SHEET = (255, 255, 255)  # BGR — the calibration sheet
-PAPER_ZONE = (200, 120, 60)    # BGR — a coloured drop-zone sheet
-MARKER = (40, 40, 200)         # BGR — a red marker-ish object
+WHITE_SHEET = (255, 255, 255)  # BGR: the calibration sheet
+PAPER_ZONE = (200, 120, 60)    # BGR: a coloured drop-zone sheet
+MARKER = (40, 40, 200)         # BGR: a red marker-ish object
 
 # Same L* (128), opposite chroma: a luminance threshold sees NO edge between these two,
 # a Lab colour-distance threshold sees a huge one. Asserted in the test below.
 EQUAL_L_BG = (200, 120, 60)
 EQUAL_L_FG = (0, 0, 240)
 
-# Pixel→table map used for the table-space angle: a pure similarity with the y FLIP the
+# Pixel -> table map used for the table-space angle: a pure similarity with the y FLIP the
 # real overhead rig has (image y grows downward, table +Y grows "up"). Uniform scale, so
 # any angle error can only come from the code, not from an anisotropic calibration.
 _MM_PER_PX = 0.5
@@ -53,7 +53,7 @@ def _corners(center, length: float, width: float, angle_deg: float) -> np.ndarra
     """4 integer corners of a rectangle of ``length``×``width`` rotated by ``angle_deg``.
 
     ``angle_deg`` is measured in IMAGE convention (x right, y down) so the long axis
-    direction is (cos θ, sin θ) — that is the ground truth the tests assert against.
+    direction is (cos θ, sin θ), which is the ground truth the tests assert against.
     """
     t = math.radians(angle_deg)
     d = np.array([math.cos(t), math.sin(t)])
@@ -126,7 +126,7 @@ def test_axis_angle_table_is_the_same_whichever_end_comes_first():
 
 
 def test_the_endpoints_straddle_the_detected_point():
-    # Midpoints of the SHORT edges ⇒ the two ends of the object, not two corners:
+    # Midpoints of the SHORT edges give the two ends of the object, not two corners:
     # their mean must land back on the blob's centre.
     ends = long_axis_pixels(_rect_scene(45.0), CENTER)
     assert ends is not None
@@ -157,7 +157,7 @@ def test_a_round_blob_has_no_meaningful_axis():
 
 
 def test_a_barely_elongated_blob_is_rejected_too():
-    # 1.2 : 1 is below MIN_ELONGATION (1.6) — its minAreaRect angle would be noise.
+    # 1.2 : 1 is below MIN_ELONGATION (1.6), so its minAreaRect angle would be noise.
     assert long_axis_pixels(_rect_scene(30.0, length=60, width=50), CENTER) is None
 
 

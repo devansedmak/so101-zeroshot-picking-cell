@@ -1,19 +1,19 @@
-"""Closed-loop visual verification — **the project thesis** (decisions.md D9).
+"""Closed-loop visual verification: **the project thesis**.
 
 After a place action we re-capture the overhead frame and ask: *is the item actually
 in the target bin?* That yes/no is what turns the old open-loop pick-and-place into a
-Physical AI agent (docs/demo-scenario.md step 5): ok ⇒ "fulfilled" alert, not-ok ⇒
+Physical AI agent: ok means a "fulfilled" alert, not-ok means
 retry once, else an ERROR alert.
 
-HOW (deliberately the dumbest thing that works, D9/ship-first): no new VLM task type.
-We reuse the *same* ``detect_points`` call as the pick (D15) — point at the item — and
+HOW (deliberately the simplest thing that works, ship first): no new VLM task type.
+We reuse the *same* ``detect_points`` call as the pick (point at the item) and
 then do a pure geometric test: does that pixel fall inside the target bin's rectangle?
 Bins don't move in a fixed overhead view, so their pixel boxes are **calibration data**
 (``hardware/config/bin-regions.json``), not perception.
 
 Split mirrors detect.py: ``evaluate_placement`` is pure (unit-tested offline, no
-credits) and ``verify_placement`` is the thin network wrapper. The [y, x] / 0–1000
-convention is NOT re-derived here — it comes from ``detect.parse_detections``.
+credits) and ``verify_placement`` is the thin network wrapper. The [y, x] / 0-1000
+convention is NOT re-derived here; it comes from ``detect.parse_detections``.
 
 TODO(hardware): the bin pixel rectangles must be measured on the real overhead frame
 once the camera is mounted (same session as the homography calibration).
@@ -49,7 +49,7 @@ class BinRegion:
     """A bin as an axis-aligned **pixel** rectangle in the fixed overhead view.
 
     ``x0,y0`` is the top-left and ``x1,y1`` the bottom-right corner (normalized on
-    construction, so swapped inputs are tolerated). Static per camera mount → this is
+    construction, so swapped inputs are tolerated). Static per camera mount, so this is
     calibration data, persisted as JSON.
     """
 
@@ -60,7 +60,7 @@ class BinRegion:
     y1: float
 
     def __post_init__(self) -> None:
-        # frozen dataclass → normalize via object.__setattr__ (cheaper than a factory).
+        # frozen dataclass, so normalize via object.__setattr__ (cheaper than a factory).
         # Compute all four first: assigning x0 before reading it again would corrupt x1.
         x0, x1 = sorted((float(self.x0), float(self.x1)))
         y0, y1 = sorted((float(self.y0), float(self.y1)))
@@ -102,7 +102,7 @@ class VerifyResult:
     item: str
     bin_label: str
     reason: str
-    detection: Detection | None = None  # the point that decided it (None ⇒ not seen)
+    detection: Detection | None = None  # the point that decided it (None = not seen)
 
     @property
     def point(self) -> tuple[float, float] | None:
@@ -173,12 +173,12 @@ def verify_placement(
     image_size: tuple[int, int] = DEFAULT_FRAME_SIZE,
     task: str = TASK_POINTS,
 ) -> VerifyResult:
-    """One VLM call on the re-captured ``image`` → geometric verdict.
+    """One VLM call on the re-captured ``image`` -> geometric verdict.
 
     ``client`` only needs ``mlmodels.run(...)`` (duck-typed, so tests use a fake and
-    burn no credits). ``image_size`` is the (w, h) the bin rectangles were surveyed on
-    — leave it at the 0..1000 default only if the regions are on that grid too.
-    ``model`` defaults to the pinned VLM slug (D15) resolved lazily from the env.
+    burn no credits). ``image_size`` is the (w, h) the bin rectangles were surveyed on.
+    Leave it at the 0..1000 default only if the regions are on that grid too.
+    ``model`` defaults to the pinned VLM slug, resolved lazily from the env.
     """
     if model is None:
         import os  # lazy: keeps this module import-cheap and env-free for pure tests
@@ -209,10 +209,10 @@ def save_bin_regions(
 
 
 def load_bin_regions(path: str | Path = DEFAULT_BIN_REGIONS_PATH) -> dict[str, BinRegion]:
-    """Load bin rectangles → ``{label: BinRegion}``.
+    """Load bin rectangles -> ``{label: BinRegion}``.
 
     Raises :class:`BinRegionsMissing` (a ``FileNotFoundError``) with a clear message if
-    the calibration hasn't been done yet — callers degrade to unverified rather than
+    the calibration hasn't been done yet; callers degrade to unverified rather than
     crashing the run.
     """
     p = Path(path)

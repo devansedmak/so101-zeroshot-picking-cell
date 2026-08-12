@@ -1,16 +1,16 @@
-"""End-to-end seam proof: perception → control, fully offline with synthetic data.
+"""End-to-end seam proof: perception -> control, fully offline with synthetic data.
 
-Proves the composed pipeline the loop was missing — VLM output → pixel → table
-homography → IK → executable MotionPlan — without a camera, robot, or network.
+Proves the composed pipeline the loop was missing: VLM output -> pixel -> table
+homography -> IK -> executable MotionPlan, without a camera, robot, or network.
 Nothing here calls the SDK; the VLM output and the homography are hand-built.
 
 The second half of this file drives the **real runnable entrypoint**
 (``run_order.main``), because the first half passing while the loop still picked from
 the hardcoded pose table is exactly the gap that made the headline claim unproven.
-It asserts the ``--perceive`` resolution order: calibration present ⇒ the IK path,
-calibration/detection missing ⇒ the hardcoded path **with a warning**, and an unknown
-item ⇒ a recorded failed outcome rather than an exception.
-Run with PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 (see runbook).
+It asserts the ``--perceive`` resolution order: calibration present means the IK path,
+calibration/detection missing means the hardcoded path **with a warning**, and an unknown
+item means a recorded failed outcome rather than an exception.
+Run with PYTEST_DISABLE_PLUGIN_AUTOLOAD=1.
 """
 
 from __future__ import annotations
@@ -25,13 +25,13 @@ from src.agent_service.poses import PICK_POSES, pick_choice_from_table, pick_pla
 from src.control import validate_plan
 from src.perception import Homography, parse_detections, pick_target
 
-# 640×480 overhead frame; an affine pixel→table calibration whose image maps onto
+# 640×480 overhead frame; an affine pixel -> table calibration whose image maps onto
 # a reachable patch of the table (X∈[100,200] mm, Y∈[-100,100] mm).
 IMG_W, IMG_H = 640, 480
 _PIXELS = [(0, 0), (640, 0), (640, 480), (0, 480)]
 _TABLE_MM = [(100, -100), (200, -100), (200, 100), (100, 100)]
 
-# One canned VLM answer: [y, x] on the 0..1000 grid ⇒ px (480, 120) ⇒ table (175, -50) mm
+# One canned VLM answer: [y, x] on the 0..1000 grid -> px (480, 120) -> table (175, -50) mm
 # under the calibration above (see tests/test_locate.py for the independent arithmetic).
 _CANNED = [{"point": [250, 750], "label": "red marker"}]
 _PERCEIVED_SAY = "picking at table (175, -50) mm"
@@ -53,7 +53,7 @@ def test_detect_to_homography_to_ik_yields_a_valid_plan():
     assert target is not None
     assert (target.x, target.y) == pytest.approx((320.0, 240.0))  # centre pixel
 
-    # Pixel → table mm → IK-driven pick plan.
+    # Pixel -> table mm -> IK-driven pick plan.
     table_x, table_y = homography.project((target.x, target.y))
     assert (table_x, table_y) == pytest.approx((150.0, 0.0), abs=1e-6)  # patch centre
 
@@ -64,12 +64,12 @@ def test_detect_to_homography_to_ik_yields_a_valid_plan():
 def test_a_measured_object_axis_reaches_the_wrist_roll_of_the_plan():
     """The orientation half of the seam: perception's axis must survive into the pose.
 
-    Without this, the axis is measured and then quietly dropped — which looks identical
+    Without this, the axis is measured and then quietly dropped, which looks identical
     to today's behaviour right up until a long object squirts out of the jaws.
     """
     pose_of = lambda plan: next(a.pose for a in plan.actions if a.type == "set_pose")  # noqa: E731
 
-    assert pose_of(pick_plan_from_table(150.0, 0.0))["5"] == 0.0  # no axis ⇒ unchanged
+    assert pose_of(pick_plan_from_table(150.0, 0.0))["5"] == 0.0  # no axis means unchanged
     rolled = pose_of(pick_plan_from_table(150.0, 0.0, 0.0))
     assert rolled["5"] == pytest.approx(-90.0)  # object lying along the reach direction
     assert validate_plan(pick_plan_from_table(150.0, 0.0, 0.0)) == []
@@ -105,7 +105,7 @@ def _offline_perceive_argv(
 ):
     """``--perceive`` argv that is guaranteed offline: canned VLM output, saved frame.
 
-    No camera (``--frame``), no VLM call (``--detections`` ⇒ the canned client), no
+    No camera (``--frame``), no VLM call (``--detections`` selects the canned client), no
     connection (dry-run is the default), and no image decode (``--frame-size``).
     ``frame_image`` (a BGR array) writes a REAL frame instead of the stub, for the tests
     that need the grasp-axis estimator to actually see something.
@@ -114,7 +114,7 @@ def _offline_perceive_argv(
         frame = tmp_path / "frame.jpg"
         frame.write_bytes(b"")  # never opened: --frame-size makes the size explicit
     else:
-        import cv2  # noqa: PLC0415 — only the axis tests need a decodable frame
+        import cv2  # noqa: PLC0415, only the axis tests need a decodable frame
 
         frame = tmp_path / "frame.png"  # PNG: no JPEG ringing on the drawn edges
         cv2.imwrite(str(frame), frame_image)
@@ -193,7 +193,7 @@ def test_perceive_undetected_and_unhardcoded_fails_the_order_without_raising(tmp
 
 
 def _frame_with_a_bar(angle_deg: float):
-    """640×480 white frame with one red bar at pixel (480, 120) — where _CANNED points."""
+    """640×480 white frame with one red bar at pixel (480, 120), where _CANNED points."""
     cv2 = pytest.importorskip("cv2")
     np = pytest.importorskip("numpy")
     import math
@@ -220,7 +220,7 @@ def test_perceive_rolls_the_wrist_to_the_seen_object_axis(tmp_path, capsys):
     assert rc == 0
     assert _PERCEIVED_SAY in out and "axis 165°" in out  # ≈174° in px, sheared by the calibration
     # The bar lies along the reach direction, so the wrist must roll ~a quarter turn to
-    # close across it — the old fixed 5=+0.0° would have grasped it end-on.
+    # close across it; the old fixed 5=+0.0° would have grasped it end-on.
     rolls = [float(v) for v in re.findall(r"5=([-+][\d.]+)°", out)]
     assert any(abs(v) > 45.0 for v in rolls)
     assert "✅ fulfilled" in out
@@ -251,7 +251,7 @@ def test_fulfill_order_records_which_pick_path_it_took():
     from src.wms_mock import Order
 
     class _Null:
-        class joints:  # noqa: N801 — duck-type for MotionExecutor
+        class joints:  # noqa: N801, duck-type for MotionExecutor
             @staticmethod
             def set(*a, **k):
                 return None
@@ -274,7 +274,7 @@ def test_fulfill_order_records_which_pick_path_it_took():
 
 
 def test_default_run_is_untouched_by_the_new_seam(capsys):
-    """No --perceive ⇒ byte-for-byte the old behaviour: hardcoded poses, no warnings."""
+    """No --perceive means byte-for-byte the old behaviour: hardcoded poses, no warnings."""
     rc = run_order.main(["--item", "red marker", "--bin", "A"])
     out = capsys.readouterr().out
 

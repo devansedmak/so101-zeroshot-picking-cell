@@ -1,7 +1,7 @@
-"""The single self-contained HTML page — inline CSS + JS, **no CDN, no fonts, no network**.
+"""The single self-contained HTML page: inline CSS + JS, **no CDN, no fonts, no network**.
 
 Built to be filmed: black background, oversized type, one thing moving at a time, and
-state changes a viewer can follow without narration. The page is dumb on purpose — it
+state changes a viewer can follow without narration. The page is dumb on purpose: it
 polls ``GET /state`` four times a second and draws exactly what
 :meth:`src.gui.app.DashboardApp.snapshot` gives it (including overlay geometry already
 projected into the served crop), so all the logic stays in Python where it is testable.

@@ -1,4 +1,4 @@
-"""Run ONE order end-to-end (order → pick → place → verify → alert) — sim entrypoint.
+"""Run ONE order end-to-end (order -> pick -> place -> verify -> alert), sim entrypoint.
 
 Pull an order from the mock WMS, drive the pick/place poses through
 control.MotionExecutor, then (with ``--verify``) close the loop: re-look at the scene,
@@ -7,24 +7,24 @@ Default is **dry-run** (no connection, no motion, no credits); the actual SIMULA
 is behind ``--sim`` and reuses the proven connect/warm-up path (control.sim_session).
 
 ``--verify`` in dry-run uses a STUB verifier (``--verify-fail N`` makes the first N
-checks fail) so the whole closed loop — including the retry and the error alert — is
+checks fail) so the whole closed loop, including the retry and the error alert, is
 demoable offline with zero credits and zero hardware. Only ``--sim --verify`` touches
 the real camera + hosted VLM.
 
 ``--perceive`` is the **headline** switch: pick where the camera actually sees the item
-(VLM → homography → IK) instead of the throwaway hardcoded pose table. It degrades
-loudly, never fatally — resolution order per pick:
+(VLM -> homography -> IK) instead of the throwaway hardcoded pose table. It degrades
+loudly, never fatally. Resolution order per pick:
 
     1. --perceive AND the calibration loads AND the item is detected AND IK reaches it
-       → poses.pick_plan_from_table(x, y)            [perceived]
-    2. anything above missing/failing → poses.pick_plan(item) + a printed ⚠ saying why
-    3. no hardcoded pose either → a recorded FAILED Fulfillment (never an exception)
+       -> poses.pick_plan_from_table(x, y)            [perceived]
+    2. anything above missing/failing -> poses.pick_plan(item) + a printed warning saying why
+    3. no hardcoded pose either -> a recorded FAILED Fulfillment (never an exception)
 
 Without ``--perceive`` nothing changes at all. Offline, ``--frame`` + ``--detections``
 replay a saved frame and canned VLM output (the pick-side analogue of the stub verifier),
 so the perceived path is demoable with no camera, no credits and no network.
 
-SAFETY (CLAUDE.md rule 2 / D9): SIMULATION-ONLY — ``--sim`` pins
+SAFETY: SIMULATION-ONLY. ``--sim`` pins
 ``cw.affect("simulation")`` via sim_session; there is no live-hardware path here.
 
 Usage:
@@ -113,10 +113,10 @@ def _live_verifier(
     device: str | None = None,
     client: Any = None,
 ) -> Verifier | None:
-    """Real closed loop: re-capture a frame → hosted VLM → is the item in the bin?
+    """Real closed loop: re-capture a frame -> hosted VLM -> is the item in the bin?
 
     Returns ``None`` (loop stays open, warning printed) if the bin pixel rectangles
-    haven't been surveyed yet — missing calibration must not abort a demo run.
+    haven't been surveyed yet; missing calibration must not abort a demo run.
     ``client`` is anything with ``mlmodels.run`` (defaults to a fresh ``Cyberwave()``;
     note the VLM client is NOT the twin). Everything network/camera is imported lazily
     so the dry-run path stays dependency-free.
@@ -150,7 +150,7 @@ def _live_verifier(
         from PIL import Image  # lazy: only the real run needs Pillow
 
         with Image.open(frame) as im:
-            size = im.size  # (w, h) — bin rectangles are in these pixels
+            size = im.size  # (w, h); bin rectangles are in these pixels
         return verify_placement(cw, str(frame), order.item, region, image_size=size)
 
     return verify
@@ -160,9 +160,9 @@ class _CannedVLM:
     """Offline stand-in for the hosted VLM: replays a saved ``detect_points`` output.
 
     Satisfies the only surface ``perception.detect`` needs (``mlmodels.run``), so the
-    whole perceived pick — detection → homography → IK → plan — is demoable and
+    whole perceived pick (detection -> homography -> IK -> plan) is demoable and
     re-runnable with no camera, no network and zero credits. The pick-side twin of
-    ``_stub_verifier``. ``output=None`` ⇒ "the VLM saw nothing", which is exactly how
+    ``_stub_verifier``. ``output=None`` means "the VLM saw nothing", which is exactly how
     the graceful-degradation path is exercised offline.
     """
 
@@ -186,18 +186,18 @@ def _load_canned_detections(path: str | Path) -> Any:  # noqa: ANN401
 
 
 def _parse_frame_size(spec: str) -> tuple[int, int]:
-    """``"640x480"`` → ``(640, 480)``."""
+    """``"640x480"`` -> ``(640, 480)``."""
     parts = [p for p in spec.replace("x", " ").replace(",", " ").split() if p]
     if len(parts) != 2:
         raise ValueError(f"bad --frame-size {spec!r}: expected WxH, e.g. 640x480")
     return int(parts[0]), int(parts[1])
 
 
-def _warn_if_clamped(choice: Any) -> None:  # noqa: ANN401 — duck-typed PickChoice
+def _warn_if_clamped(choice: Any) -> None:  # noqa: ANN401, duck-typed PickChoice
     """Say it out loud when the IK solution exceeds the executor's joint limits.
 
     ``solve_ik`` returns the truthful raw solution; ``MotionExecutor`` then *clamps* at
-    the SDK boundary — safe, but it silently moves the tip away from the perceived point.
+    the SDK boundary. Safe, but it silently moves the tip away from the perceived point.
     With the current conservative skeleton limits (± 60° on joints 2-4) a real table
     reach needs more elbow travel than that, so this is expected to fire until the
     limits are widened against measured link lengths (hardware/config/link-lengths.md).
@@ -228,14 +228,14 @@ def _perceiving_resolver(
 ) -> PickResolver | None:
     """``--perceive``: resolve each pick from what the camera sees, degrading loudly.
 
-    Returns ``None`` — meaning "loop keeps its hardcoded pose table" — when the
-    pixel→table calibration isn't there yet, after printing why. Same shape and wording
+    Returns ``None`` (meaning "loop keeps its hardcoded pose table") when the
+    pixel -> table calibration isn't there yet, after printing why. Same shape and wording
     as ``_live_verifier``'s missing-calibration branch: **missing calibration must not
     abort a demo run**. Per-order failures (item not detected, capture failed, target
-    unreachable) also fall back with a ⚠ instead of failing the order.
+    unreachable) also fall back with a warning instead of failing the order.
 
     The ONE deliberate exception is ``GraspAngleUnreachable``: there the item WAS seen
-    and its position IS reachable — only its orientation is impossible for the wrist.
+    and its position IS reachable; only its orientation is impossible for the wrist.
     Falling back to a hardcoded pose would grasp a seen item at a knowingly wrong angle,
     so that one is surfaced as a fulfilment failure (``fulfill_order`` records it as a
     failed Fulfillment) whose message tells the operator to rotate the object.
@@ -274,15 +274,15 @@ def _perceiving_resolver(
                 axis_deg=located.axis_deg,
             )
         except GraspAngleUnreachable as e:
-            # Seen, and reachable — only the grasp ANGLE is impossible. A hardcoded-pose
+            # Seen, and reachable; only the grasp ANGLE is impossible. A hardcoded-pose
             # fallback here would grasp the item at a knowingly wrong angle, so fail the
             # order loudly instead; the message says how to fix it (rotate the object).
             print(f"[run_order] ✋ grasp angle unreachable: {e}")
             raise
-        except Exception as e:  # noqa: BLE001 — perception must never fail an order
+        except Exception as e:  # noqa: BLE001, perception must never fail an order
             print(f"[run_order] ⚠ perceived pick unavailable: {type(e).__name__}: {e}")
             print(f"[run_order]   → falling back to the hardcoded pose for {order.item!r}.")
-            return pick_choice(order.item)  # UnknownItem here ⇒ recorded failed Fulfillment
+            return pick_choice(order.item)  # UnknownItem here means a failed Fulfillment
         print(f"[run_order] 👁 {located.describe()}")
         _warn_if_clamped(choice)
         return choice

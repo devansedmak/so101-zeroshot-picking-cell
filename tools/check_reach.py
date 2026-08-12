@@ -5,23 +5,23 @@ WHY: the zone rectangles are surveyed in PIXELS (`hardware/config/bin-regions.js
 the arm thinks in MILLIMETRES from its own pan axis. Nothing in the loop ever compared the
 two, so a layout that simply cannot be reached looks perfectly healthy right up to the
 moment `poses.pick_plan_from_table` raises `Unreachable` mid-demo. This tool closes that
-gap: pixels → table mm → radius → reachable yes/no, with the *binding joint named*, and a
+gap: pixels -> table mm -> radius -> reachable yes/no, with the *binding joint named*, and a
 non-zero exit if any zone fails. Run it after sliding the mat; nothing here touches
 hardware, the network, or any config file.
 
 THE BAND. With the gripper held vertical (`ik.solve_ik`) reach is a thin annulus, not a
 disc. Outside it the wrist cannot stay pointing down; inside it the elbow folds past its
 limit. Both ends come from `motion.DEFAULT_JOINT_LIMITS`, so this tool bisects the real
-`solve_ik` + `in_limits` rather than re-deriving the trigonometry — if the limits or the
+`solve_ik` + `in_limits` rather than re-deriving the trigonometry: if the limits or the
 link lengths change, the band here follows automatically.
 
 TWO IK MODELS, ON PURPOSE. `ik.py` assumes the shoulder-lift pivot is coaxial with the
 base-pan axis. It is not: it sits ~30.4 mm forward and ~18.3 mm lateral of it
-(progress.md 2026-08-11, hardware/config/link-lengths.md). The correction is derived but
+(measured on hardware; see hardware/config/link-lengths.md). The correction is derived but
 deliberately not implemented before the demo, and it shifts the whole band OUTWARD by
 ~31 mm. So a layout tuned to the shipped model can be un-reachable under the corrected one
 and vice versa. This tool therefore evaluates **both** and by default demands a zone pass
-under both — the only placement that survives implementing (or not implementing) the fix.
+under both: the only placement that survives implementing (or not implementing) the fix.
 
 EXTRAPOLATION WARNING. The homography was fitted from marks on one printed 297x210 mm
 sheet. Outside that rectangle it extrapolates, and extrapolation of a projective map is
@@ -83,11 +83,11 @@ SHOULDER_LATERAL_MM: float = 18.3
 
 # The printed calibration sheet: A4 landscape, origin corner AT THE ARM BASE, +X away from
 # the arm, +Y to its left (hardware/config/cameras.md step 0 / step 5 `--sheet 297,210`).
-# This rectangle is the homography's interpolation region — outside it, radii extrapolate.
+# This rectangle is the homography's interpolation region; outside it, radii extrapolate.
 SHEET_MM: tuple[float, float] = (297.0, 210.0)
 
 COAXIAL = "coaxial"  # exactly what src/control/ik.py does today
-OFFSET = "offset"    # with the derived-but-unimplemented pan→shoulder offset applied
+OFFSET = "offset"    # with the derived-but-unimplemented pan -> shoulder offset applied
 MODELS: tuple[str, ...] = (COAXIAL, OFFSET)
 
 _BISECT_TOL_MM = 1e-4
@@ -109,7 +109,7 @@ def joint_solution(x: float, y: float, z: float = PICK_Z, *, model: str = COAXIA
                 f"{SHOULDER_LATERAL_MM:.1f} mm lateral shoulder offset"
             )
         # The shoulder plane is tangent to a circle of radius b about the pan axis, so the
-        # in-plane radius is √(d²−b²) − a and the pan angle picks up −atan2(b, √(d²−b²)).
+        # in-plane radius is sqrt(d²-b²) - a, and the pan angle picks up -atan2(b, sqrt(d²-b²)).
         s = math.sqrt(d * d - SHOULDER_LATERAL_MM**2)
         radius = s - SHOULDER_FORWARD_MM
         pan = math.degrees(math.atan2(y, x) - math.atan2(SHOULDER_LATERAL_MM, s))
@@ -119,13 +119,13 @@ def joint_solution(x: float, y: float, z: float = PICK_Z, *, model: str = COAXIA
     else:
         raise ValueError(f"unknown IK model {model!r}: expected one of {MODELS}")
 
-    joints = solve_ik(radius, 0.0, z)  # solve in the shoulder plane…
-    joints["1"] = pan                  # …then restore the true base pan
+    joints = solve_ik(radius, 0.0, z)  # solve in the shoulder plane...
+    joints["1"] = pan                  # ...then restore the true base pan
     return joints
 
 
 def out_of_limits(joints: dict[str, float]) -> list[str]:
-    """Servo IDs of every joint outside ``DEFAULT_JOINT_LIMITS`` (empty ⇒ all good)."""
+    """Servo IDs of every joint outside ``DEFAULT_JOINT_LIMITS`` (empty means all good)."""
     return [
         j
         for j, angle in joints.items()
@@ -170,7 +170,7 @@ def band(z: float = PICK_Z, *, model: str = COAXIAL) -> tuple[float, float]:
 
 
 def robust_band(z: float = PICK_Z, *, models: Iterable[str] = MODELS) -> tuple[float, float]:
-    """Intersection of the per-model bands — radii that work whichever model is right."""
+    """Intersection of the per-model bands: radii that work whichever model is right."""
     bands = [band(z, model=m) for m in models]
     return max(b[0] for b in bands), min(b[1] for b in bands)
 
@@ -196,9 +196,9 @@ class ZoneReach:
     pixel: tuple[float, float]
     table: tuple[float, float]
     radius: float
-    verdicts: dict[str, str | None]  # model → binding joint (None ⇒ reachable)
-    margin: float                    # mm to the nearest edge of the robust band (<0 ⇒ out)
-    outside_sheet: float             # mm outside the printed calibration rectangle (≤0 ⇒ in)
+    verdicts: dict[str, str | None]  # model -> binding joint (None = reachable)
+    margin: float                    # mm to the nearest edge of the robust band (<0 = out)
+    outside_sheet: float             # mm outside the printed calibration rectangle (≤0 = in)
 
     @property
     def ok(self) -> bool:
@@ -206,7 +206,7 @@ class ZoneReach:
 
 
 def _outside_sheet(table: tuple[float, float], sheet: tuple[float, float] = SHEET_MM) -> float:
-    """How far outside the printed rectangle a table point is (≤0 ⇒ inside)."""
+    """How far outside the printed rectangle a table point is (≤0 means inside)."""
     x, y = table
     return max(-x, x - sheet[0], -y, y - sheet[1])
 
@@ -252,7 +252,7 @@ def best_slide(
 
     Maximising the minimum margin (rather than just "get them all inside") is what makes
     the instruction survive a few mm of ruler error. ``toward_base_only`` restricts the
-    search to −X, i.e. the one-number "slide it N cm straight toward the base" move that a
+    search to -X, i.e. the one-number "slide it N cm straight toward the base" move that a
     human can execute in a single attempt without rotating the sheet.
 
     Coarse grid then a shrinking pattern search: the objective is piecewise smooth with

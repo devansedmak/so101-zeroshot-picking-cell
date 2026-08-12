@@ -1,31 +1,31 @@
-"""SO-101 analytic inverse kinematics — table (X, Y, Z) mm → joint targets (deg).
+"""SO-101 analytic inverse kinematics: table (X, Y, Z) mm -> joint targets (deg).
 
-The missing ⬜ of the loop seam (progress.md Part E): homography gives a table
+The missing piece of the loop seam: homography gives a table
 point in mm, this turns it into servo angles. Deliberately the *simplest* solver
-that closes the loop — a base-pan + planar 2-link reach, gripper held vertical —
+that closes the loop (a base-pan + planar 2-link reach, gripper held vertical),
 not a full 6-DOF numeric IK. Pure math (no SDK / robot / network), so the whole
 FK∘IK round-trip is unit-testable offline.
 
 Frame (ASSUMED, see TODO(calibration)): the table (X, Y) handed in is already in
-the **robot base frame** — origin under the base pivot, +X forward, +Y left, +Z
-up, angles per calibration. The real camera→base alignment is a future
+the **robot base frame**: origin under the base pivot, +X forward, +Y left, +Z
+up, angles per calibration. The real camera-to-base alignment is a future
 calibration offset that will pre-transform (X, Y) before it reaches here.
 
 Model:
 - ``q1`` (shoulder_pan) rotates the whole arm about +Z: ``q1 = atan2(y, x)``.
 - In the resulting vertical plane, ``(r=hypot(x,y), z)`` is reached by a 2-link
-  arm ``L1`` (shoulder→elbow) + ``L2`` (elbow→wrist), law-of-cosines, **elbow-up**
+  arm ``L1`` (shoulder -> elbow) + ``L2`` (elbow -> wrist), law-of-cosines, **elbow-up**
   branch (``q3 ≤ 0``, matching the sign of the old hardcoded poses).
 - The gripper is held pointing **straight down**; ``q4`` (wrist_flex) is derived
   from ``q2, q3`` so the tool axis is vertical, and the tip sits ``L3`` below the
   wrist. ``q6`` (gripper) = open.
 - ``q5`` (wrist_roll) = 0 unless the caller passes ``axis_deg``, the object's long
   axis on the table (perception/orient.py). Then the wrist rolls so the jaws close
-  **across** that axis instead of along it — see :func:`solve_ik`.
+  **across** that axis instead of along it. See :func:`solve_ik`.
 
 Angles in DEGREES, lengths in mm. Sign/offset conventions are internally
 consistent so that ``forward_kinematics(solve_ik(x, y, z)) ≈ (x, y, z)`` for any
-reachable target — that round-trip is THE correctness invariant.
+reachable target. That round-trip is THE correctness invariant.
 
 ``solve_ik`` does NOT clamp to ``DEFAULT_JOINT_LIMITS`` (the conservative skeleton
 limits would silently corrupt a valid grasp). It returns the truthful raw
@@ -43,31 +43,31 @@ from .motion import DEFAULT_JOINT_LIMITS, JOINTS
 
 # --- geometry (mm) -------------------------------------------------------
 # Derived 2026-08-11 from the official SO-101 URDF (TheRobotStudio/SO-ARM100,
-# Simulation/SO101/so101_new_calib.urdf) by chaining the joint origins — see
+# Simulation/SO101/so101_new_calib.urdf) by chaining the joint origins. See
 # hardware/config/link-lengths.md. L1/L2 confirmed the old placeholders exactly;
 # BASE_HEIGHT was 3.4 mm high; L3 was 60 mm SHORT, which would have driven the
 # gripper into the table on the first live pick.
-L1_SHOULDER_TO_ELBOW_MM: float = 116.0  # shoulder_lift pivot → elbow_flex pivot
-L2_ELBOW_TO_WRIST_MM: float = 135.0     # elbow_flex pivot → wrist_flex pivot
-L3_WRIST_TO_TIP_MM: float = 159.8       # wrist_flex pivot → gripper_frame (TCP)
-BASE_HEIGHT_MM: float = 116.6           # table plane → shoulder_lift pivot
+L1_SHOULDER_TO_ELBOW_MM: float = 116.0  # shoulder_lift pivot -> elbow_flex pivot
+L2_ELBOW_TO_WRIST_MM: float = 135.0     # elbow_flex pivot -> wrist_flex pivot
+L3_WRIST_TO_TIP_MM: float = 159.8       # wrist_flex pivot -> gripper_frame (TCP)
+BASE_HEIGHT_MM: float = 116.6           # table plane -> shoulder_lift pivot
 
 # Default tip height for a table pick: gripper tip at the table surface (Z=0).
 PICK_Z: float = 0.0
 
-# Gripper open angle — a local mirror of agent_service.poses.GRIPPER_OPEN, kept
-# here to avoid a control→agent_service import cycle. Keep the two in sync; the
+# Gripper open angle: a local mirror of agent_service.poses.GRIPPER_OPEN, kept
+# here to avoid a control -> agent_service import cycle. Keep the two in sync; the
 # measurement that fixed the value (hardware 2026-08-11: HIGH = OPEN, LOW = SHUT,
 # jaws-touching reads 6.1°) is written up there and in hardware/config/joint-ranges.md.
 GRIPPER_OPEN: float = 105.0
 
-# Angle between the JAW CLOSING LINE and the arm's RADIAL direction (base → tip), at
+# Angle between the JAW CLOSING LINE and the arm's RADIAL direction (base -> tip), at
 # wrist_roll q5 = 0°. The current 0.0 asserts "at zero roll the jaws close along the line
 # from the base out to the tip". That is an ASSUMPTION, not a measurement.
 #
-# HOW TO MEASURE IT (⚠ still TODO — needs the arm and the overhead camera, ~5 min):
-#   1. Move the arm to a known pose over the table with q5 = 0 — e.g.
-#      `tools/live_check.py hover --x … --y …`, which solves IK with no axis_deg and so
+# HOW TO MEASURE IT (still TODO: needs the arm and the overhead camera, ~5 min):
+#   1. Move the arm to a known pose over the table with q5 = 0, e.g.
+#      `tools/live_check.py hover --x ... --y ...`, which solves IK with no axis_deg and so
 #      leaves the roll at zero. Note the commanded (x, y): the radial direction in the
 #      overhead frame is the line from the base's image position to that point.
 #   2. WITHOUT moving the arm, photograph the jaws from the overhead camera:
@@ -75,16 +75,16 @@ GRIPPER_OPEN: float = 105.0
 #   3. In that image, measure the angle from the radial direction (step 1) to the line
 #      the two jaws close along (the line joining the fingertips, perpendicular to the
 #      jaw faces). Signed the same way as q5, i.e. counter-clockwise positive.
-#   4. Put that number here, in degrees. Re-run tests/test_ik.py — the oriented-grasp
+#   4. Put that number here, in degrees. Re-run tests/test_ik.py. The oriented-grasp
 #      tests derive the expected jaw direction from this constant, so they follow it.
 #
 # WHY IT MATTERS: this is a pure constant OFFSET on the wrist roll. A wrong value rotates
-# EVERY oriented grasp by exactly the same amount — a systematic bias, identical on every
+# EVERY oriented grasp by exactly the same amount: a systematic bias, identical on every
 # object, with no scatter to make it visible. So the jaws end up consistently off the
 # perpendicular and long thin items (marker, pen) keep squirting out end-on: precisely the
 # failure the axis logic exists to remove, silently reintroduced. Note it is also
 # indistinguishable, from the outside, from a constant bias in the perception axis
-# estimate (perception/orient.py) — so measure it independently rather than tuning it to
+# estimate (perception/orient.py), so measure it independently rather than tuning it to
 # make picks work, or the two errors will be fitted against each other.
 JAW_OFFSET_DEG: float = 0.0
 
@@ -99,7 +99,7 @@ class GraspAngleUnreachable(ValueError):
     """The wrist cannot roll far enough to close the jaws across the object's axis.
 
     Raised instead of silently clamping: ``MotionExecutor._clamp`` would otherwise turn
-    an impossible roll into a confident grasp at the WRONG angle — the exact failure
+    an impossible roll into a confident grasp at the WRONG angle, the exact failure
     (long object squirting out of end-on jaws) the axis logic exists to prevent.
     """
 
@@ -109,7 +109,7 @@ def forward_kinematics(joints: dict[str, float]) -> tuple[float, float, float]:
 
     Uses joints "1".."4" (pan, shoulder_lift, elbow_flex, wrist_flex); "5"/"6"
     (roll/gripper) don't move the tip in this planar model. Inverse of
-    :func:`solve_ik` — see the module round-trip invariant.
+    :func:`solve_ik`. See the module round-trip invariant.
     """
     q1 = math.radians(joints["1"])
     q2 = math.radians(joints["2"])
@@ -120,10 +120,10 @@ def forward_kinematics(joints: dict[str, float]) -> tuple[float, float, float]:
     a_link2 = q2 + q3          # link2 (forearm) heading
     # wrist_flex's positive direction is INVERTED relative to shoulder/elbow, hence the
     # minus. Verified on hardware 2026-08-11: commanding (11.89, 59.24, -62.00, -87.25)°
-    # read back on the encoders as (11.5, 59.6, -60.2, -87.1)° — the arm tracked the
-    # command exactly — yet the tool pointed straight UP. With this sign the same pose
+    # read back on the encoders as (11.5, 59.6, -60.2, -87.1)°, so the arm tracked the
+    # command exactly, yet the tool pointed straight UP. With this sign the same pose
     # gives 59.6 - 60.2 + 87.1 = +86.5° (up), which is what was actually observed.
-    a_tool = q2 + q3 - q4      # tool heading (‑90° ⇒ straight down)
+    a_tool = q2 + q3 - q4      # tool heading (-90° means straight down)
     wrist_r = L1_SHOULDER_TO_ELBOW_MM * math.cos(q2) + L2_ELBOW_TO_WRIST_MM * math.cos(a_link2)
     wrist_z = (
         BASE_HEIGHT_MM
@@ -170,24 +170,24 @@ def solve_ik(
     z: float = PICK_Z,
     axis_deg: float | None = None,
 ) -> dict[str, float]:
-    """Table/base target (mm) → joint targets in DEGREES, keyed "1".."6".
+    """Table/base target (mm) -> joint targets in DEGREES, keyed "1".."6".
 
     Holds the gripper vertical (tip ``L3`` below the wrist), solves the 2-link
     reach on the **elbow-up** branch, and sets gripper=open. Raises
     :class:`Unreachable` if the (radial, vertical) target is outside
     ``[|L1-L2|, L1+L2]`` (z is folded into this planar reach check). The result
-    is NOT clamped to ``DEFAULT_JOINT_LIMITS`` — see the module docstring and
+    is NOT clamped to ``DEFAULT_JOINT_LIMITS``. See the module docstring and
     :func:`in_limits`.
 
     ``axis_deg`` is the object's long axis on the table in degrees (mod 180, from
-    perception.orient). ``None`` ⇒ roll stays at 0° exactly as before, so a scene
+    perception.orient). ``None`` means roll stays at 0° exactly as before, so a scene
     with no measurable axis behaves like it always did. Given one, the wrist rolls
     so the jaws close across the object (:func:`_wrist_roll_for_axis`), which can
     raise :class:`GraspAngleUnreachable`.
     """
     q1 = math.atan2(y, x)
 
-    # Gripper vertical ⇒ tip is straight below the wrist by L3; solve for the wrist.
+    # Gripper vertical means the tip is straight below the wrist by L3; solve for the wrist.
     r = math.hypot(x, y)
     wrist_r = r
     dz = (z + L3_WRIST_TO_TIP_MM) - BASE_HEIGHT_MM
@@ -201,7 +201,7 @@ def solve_ik(
             f"outside [{lo:.1f}, {hi:.1f}] mm"
         )
 
-    # Law of cosines for the 2-link arm; elbow-up ⇒ q3 ≤ 0.
+    # Law of cosines for the 2-link arm; elbow-up means q3 ≤ 0.
     cos_q3 = (wrist_r**2 + dz**2 - L1_SHOULDER_TO_ELBOW_MM**2 - L2_ELBOW_TO_WRIST_MM**2) / (
         2 * L1_SHOULDER_TO_ELBOW_MM * L2_ELBOW_TO_WRIST_MM
     )
@@ -212,7 +212,7 @@ def solve_ik(
         L2_ELBOW_TO_WRIST_MM * math.sin(q3),
         L1_SHOULDER_TO_ELBOW_MM + L2_ELBOW_TO_WRIST_MM * math.cos(q3),
     )
-    # Tool absolute heading must be ‑90° (straight down). With wrist_flex inverted
+    # Tool absolute heading must be -90° (straight down). With wrist_flex inverted
     # (see forward_kinematics) that is q2 + q3 - q4 = -pi/2, so:
     q4 = (q2 + q3) + math.pi / 2
 

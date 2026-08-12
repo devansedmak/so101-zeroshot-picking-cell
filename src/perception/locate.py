@@ -1,23 +1,23 @@
-"""Locate the ordered item on the table: capture → detect → homography → (X, Y) mm.
+"""Locate the ordered item on the table: capture -> detect -> homography -> (X, Y) mm.
 
 WHY THIS MODULE EXISTS. Every piece of the zero-shot claim already worked in isolation
-(``capture`` → ``detect`` → ``homography`` → ``control.ik``), but the runnable loop still
+(``capture`` -> ``detect`` -> ``homography`` -> ``control.ik``), but the runnable loop still
 picked from the throwaway hardcoded pose table (``agent_service.poses.PICK_POSES``), so
-the headline — *the arm picks what the camera sees* — was never proven end-to-end. This
+the headline (*the arm picks what the camera sees*) was never proven end-to-end. This
 is the one composition step that was missing. It adds **no new geometry maths**: it only
 chains the four proven parts and hands the loop a table coordinate for
-``poses.pick_plan_from_table`` → IK.
+``poses.pick_plan_from_table`` -> IK.
 
 Deliberately thin and pure-ish:
-- ``client`` only needs ``mlmodels.run(...)`` (duck-typed ⇒ a fake replays canned VLM
-  output offline, no credits — same trick as detect.py / verify.py).
+- ``client`` only needs ``mlmodels.run(...)`` (duck-typed, so a fake replays canned VLM
+  output offline, no credits; same trick as detect.py / verify.py).
 - camera code is imported **lazily inside the function**, so importing this module (and
   therefore the whole agent_service loop) never needs a camera or the SDK.
-- the ``[y, x]`` / 0–1000 VLM convention (decisions.md D15) is **not** re-derived here;
+- the ``[y, x]`` / 0-1000 VLM convention is **not** re-derived here;
   it stays owned by ``detect.parse_detections``, and target selection reuses
   ``detect.pick_target`` so picking and verification agree on which blob "is" the item.
 
-TODO(calibration): the homography's **world frame is assumed to be the IK base frame** —
+TODO(calibration): the homography's **world frame is assumed to be the IK base frame**:
 same origin, same axes (see hardware/config/link-lengths.md §"Frame convention" and the
 TODO(calibration) in src/control/ik.py). Nothing here detects or corrects an offset: if
 the calibration sheet's origin is not at the arm base, every pick is off by that offset.
@@ -44,7 +44,7 @@ __all__ = [
     "locate_item",
 ]
 
-#: Where tools/calibrate_homography.py writes the pixel→table calibration.
+#: Where tools/calibrate_homography.py writes the pixel -> table calibration.
 DEFAULT_HOMOGRAPHY_PATH = Path("hardware/config/homography.json")
 
 
@@ -61,7 +61,7 @@ class FrameSizeUnknown(LocateError):
 
 
 class HomographyMissing(FileNotFoundError):
-    """No pixel→table calibration file yet (needs the mounted overhead camera).
+    """No pixel -> table calibration file yet (needs the mounted overhead camera).
 
     Mirrors ``verify.BinRegionsMissing``: callers degrade to the hardcoded pose table
     with a warning rather than crashing a demo run.
@@ -70,14 +70,14 @@ class HomographyMissing(FileNotFoundError):
 
 @dataclass(frozen=True)
 class LocatedItem:
-    """Where the ordered item is, in both frames that matter — plus the evidence.
+    """Where the ordered item is, in both frames that matter, plus the evidence.
 
     ``pixel`` is the grasp point in the source frame's pixels, ``table_mm`` the same
     point on the table plane in mm (IK input), ``frame`` the JPEG it was decided on
     (keep it: it is the demo's narration and the post-mortem artifact for a bad pick).
 
     ``axis_deg`` is the object's long axis on the table (degrees mod 180, from
-    ``orient``) — what lets IK roll the wrist so the jaws close across the object.
+    ``orient``). That is what lets IK roll the wrist so the jaws close across the object.
     ``None`` means "no measurable axis": the pick still happens, at the default roll.
     """
 
@@ -118,9 +118,9 @@ class LocatedItem:
 
 
 def load_homography(path: str | Path = DEFAULT_HOMOGRAPHY_PATH) -> Homography:
-    """Load the pixel→table calibration, or raise :class:`HomographyMissing`.
+    """Load the pixel -> table calibration, or raise :class:`HomographyMissing`.
 
-    The missing-file message is the instruction for fixing it — print it, don't swallow it.
+    The missing-file message is the instruction for fixing it: print it, don't swallow it.
     """
     p = Path(path)
     if not p.exists():
@@ -134,12 +134,12 @@ def load_homography(path: str | Path = DEFAULT_HOMOGRAPHY_PATH) -> Homography:
 def frame_size(image: str | Path) -> tuple[int, int]:
     """(width, height) in px of a saved frame, via OpenCV then Pillow (both lazy).
 
-    Needed because the VLM answers on its own 0–1000 grid while the homography was
+    Needed because the VLM answers on its own 0-1000 grid while the homography was
     fitted in real image pixels. Raises :class:`FrameSizeUnknown` with the fix.
     """
     path = Path(image)
     try:
-        import cv2  # noqa: PLC0415 — optional/heavy: probed at call time
+        import cv2  # noqa: PLC0415, optional/heavy: probed at call time
     except ImportError:
         cv2 = None  # type: ignore[assignment]
     if cv2 is not None:
@@ -148,7 +148,7 @@ def frame_size(image: str | Path) -> tuple[int, int]:
             h, w = img.shape[:2]
             return int(w), int(h)
     try:
-        from PIL import Image  # noqa: PLC0415 — optional backend
+        from PIL import Image  # noqa: PLC0415, optional backend
     except ImportError:
         pass
     else:
@@ -156,7 +156,7 @@ def frame_size(image: str | Path) -> tuple[int, int]:
             with Image.open(path) as im:
                 return int(im.size[0]), int(im.size[1])
         except OSError:
-            pass  # unreadable/not an image — fall through to the actionable error
+            pass  # unreadable/not an image; fall through to the actionable error
     raise FrameSizeUnknown(
         f"could not read the pixel size of {path} (missing, empty, or not an image) — "
         f"pass image_size=(w, h) explicitly, or install a reader "
@@ -175,16 +175,16 @@ def locate_item(
     image_size: tuple[int, int] | None = None,
     task: str = TASK_POINTS,
 ) -> LocatedItem:
-    """Where is ``item`` on the table? → :class:`LocatedItem` (pixel + table mm).
+    """Where is ``item`` on the table? -> :class:`LocatedItem` (pixel + table mm).
 
     Args:
         item: the ordered item name, used verbatim as the open-vocab VLM prompt.
         client: anything exposing ``mlmodels.run(...)`` (the hosted VLM; a fake offline).
-        homography: a fitted pixel→table map (see :func:`load_homography`).
-        image: a **saved** frame to re-use — makes the whole path re-runnable and
-            testable and bypasses capture entirely. ``None`` ⇒ grab a fresh still.
-        camera: ``/dev/videoN`` or index for the fresh capture (``None`` ⇒ auto-select).
-        model: VLM model ref; ``None`` ⇒ ``$CYBERWAVE_VLM_MODEL`` (default slug, D15).
+        homography: a fitted pixel -> table map (see :func:`load_homography`).
+        image: a **saved** frame to re-use; makes the whole path re-runnable and
+            testable and bypasses capture entirely. ``None`` means grab a fresh still.
+        camera: ``/dev/videoN`` or index for the fresh capture (``None`` auto-selects).
+        model: VLM model ref; ``None`` means ``$CYBERWAVE_VLM_MODEL`` (the default slug).
         image_size: (w, h) of ``image`` when it should not be probed from the file.
         task: VLM structured task (``detect_points`` by default).
 
@@ -215,21 +215,21 @@ def locate_item(
             f"named the way the order names it?"
         )
 
-    # The only geometry here: pixel → table plane. Frame assumption: see module TODO.
+    # The only geometry here: pixel -> table plane. Frame assumption: see module TODO.
     x_mm, y_mm = homography.project((target.x, target.y))
 
     # Best-effort: how is the item TURNED? (lets IK roll the wrist so the jaws close
-    # across a long thin object instead of end-on.) Everything about this is optional —
-    # OpenCV may be absent, the frame may be a stub, the blob may be round — and a
+    # across a long thin object instead of end-on.) Everything about this is optional:
+    # OpenCV may be absent, the frame may be a stub, the blob may be round, and a
     # missing angle must degrade to the old fixed-roll grasp, never fail an order.
     axis_deg: float | None = None
     try:
-        from . import orient  # noqa: PLC0415 — lazy: OpenCV-gated, same rule as capture
+        from . import orient  # noqa: PLC0415, lazy: OpenCV-gated, same rule as capture
 
         ends = orient.long_axis_pixels(frame, (target.x, target.y))
         if ends is not None:
             axis_deg = orient.axis_angle_table(homography, *ends)
-    except Exception:  # noqa: BLE001 — orientation is a bonus, never a failure mode
+    except Exception:  # noqa: BLE001, orientation is a bonus, never a failure mode
         axis_deg = None
 
     return LocatedItem(

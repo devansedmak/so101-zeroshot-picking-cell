@@ -23,7 +23,7 @@ class FakeJoints:
     def __init__(self) -> None:
         self.calls: list[tuple[str, float, bool]] = []
 
-    # NOTE: the real SDK signature is `set(..., degrees: bool = False)` — i.e. RADIANS by
+    # NOTE: the real SDK signature is `set(..., degrees: bool = False)`, i.e. RADIANS by
     # default. The fake mirrors that default deliberately: if it defaulted to True, dropping
     # `degrees=True` at the call site would still pass every test here while sending degree
     # values to a real arm as radians (a 30° command becomes 30 rad). Keep this False.
@@ -199,10 +199,10 @@ def test_set_pose_commands_only_the_named_joints():
     """A pose that says nothing about a joint must leave that joint alone.
 
     Regression, found on hardware 2026-08-11: ``tools/live_check.py`` issued a set_pose
-    that deliberately EXCLUDED joint 6 — and the physical gripper closed anyway. The
+    that deliberately EXCLUDED joint 6, and the physical gripper closed anyway. The
     executor merged the pose into ``_current_pose`` (initialised to 0° for all six) and
     ramped the union, so every unnamed joint was commanded to 0°. For joint 6, 0° is the
-    SHUT end of the follower's calibrated 0→128.9° span (hardware/config/joint-ranges.md),
+    SHUT end of the follower's calibrated 0 to 128.9° span (hardware/config/joint-ranges.md),
     so a fresh executor's first pose silently clamped the jaws on whatever was in them.
     """
     robot = FakeRobot()
@@ -247,7 +247,7 @@ def test_a_later_pose_does_not_re_command_an_earlier_joint():
 
 
 def test_home_still_commands_every_joint():
-    """``home`` is the one action that legitimately names all six — it must keep doing so."""
+    """``home`` is the one action that legitimately names all six, and it must keep doing so."""
     robot = FakeRobot()
     ex = MotionExecutor(robot, ramp_hz=10)
     ex.execute(MotionPlan(actions=[Action(type="home", duration=0.5)]))
@@ -264,7 +264,7 @@ def test_home_returns_all_joints_to_zero():
 
 def test_name_map_translates_at_sdk_boundary_only():
     robot = FakeRobot()
-    # canonical "1".."6" → twin's actual "_1".."_6"
+    # canonical "1".."6" -> twin's actual "_1".."_6"
     name_map = {j: f"_{j}" for j in JOINTS}
     ex = MotionExecutor(robot, name_map=name_map)
     ex.execute(MotionPlan(actions=[Action(type="set_joint", joint="1", angle=20, duration=0.5)]))
@@ -278,7 +278,7 @@ def test_zero_duration_snaps_in_one_step():
     robot = FakeRobot()
     ex = MotionExecutor(robot)
     ex.execute(MotionPlan(actions=[Action(type="set_joint", joint="1", angle=25, duration=0.0)]))
-    # duration 0 → single snap: the NAMED joint commanded exactly once, and nothing else
+    # duration 0 -> single snap: the NAMED joint commanded exactly once, and nothing else
     # commanded at all (see test_set_pose_commands_only_the_named_joints).
     assert _positions_for(robot, "1") == [pytest.approx(25)]
     assert len(robot.joints.calls) == 1
@@ -288,7 +288,7 @@ def test_every_sdk_call_passes_degrees_explicitly():
     """Guards the units boundary: the real SDK's `joints.set` defaults to RADIANS.
 
     Our poses are all in degrees, so every command must set degrees=True explicitly.
-    Dropping it would silently reinterpret a 30° target as 30 rad on real hardware —
+    Dropping it would silently reinterpret a 30° target as 30 rad on real hardware:
     the kind of bug that only shows up when the arm is plugged in.
     """
     robot = FakeRobot()

@@ -8,7 +8,7 @@ dependencies = [
     "cyberwave[camera]",
     "numpy",
     "opencv-python",
-    "pillow",          # the SDK's mlmodels.run image path imports PIL lazily — missing it
+    "pillow",          # the SDK's mlmodels.run image path imports PIL lazily; missing it
                        # fails ONLY on the real VLM call, i.e. exactly during a live demo
     "python-dotenv",
 ]
@@ -16,7 +16,7 @@ dependencies = [
 [project.optional-dependencies]
 # NOTE: the local BERT-NER + GroundingDINO stack (transformers/torch) was dropped as the
 # primary perception path in favour of the Cyberwave-hosted VLM (D10/D13), and the VLA
-# training fallback is dead (D18) — so neither is a dependency of anything we ship.
+# training fallback is dead, so neither is a dependency of anything we ship.
 # Order intake is deliberately stdlib http.server, not FastAPI (D16).
 dev = ["pytest", "ruff", "black"]
 

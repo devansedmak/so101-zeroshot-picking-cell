@@ -1,7 +1,7 @@
-# Port mapping — SO-101 arms
+# Port mapping: SO-101 arms
 
 Determined 2026-07-15 (Session 3) by USB-C unplug test. **Use the stable `by-id`
-serial**, not `/dev/ttyACMx` — the ACM numbers can reshuffle on reboot/replug.
+serial**, not `/dev/ttyACMx`; the ACM numbers can reshuffle on reboot/replug.
 
 | Role | Stable serial | by-id symlink | Enumerated (15 Jul) | PSU |
 |---|---|---|---|---|
@@ -12,4 +12,4 @@ serial**, not `/dev/ttyACMx` — the ACM numbers can reshuffle on reboot/replug.
   the serial only.
 - User in `dialout` → no sudo needed for serial access.
 - **Camera** (ARC International, `05a3:9230`) → `/dev/video4` + `/dev/video5`. Built-in
-  Acer cam = `/dev/video0–3`. See `cameras.md` once mounted (still capped 15 Jul).
+  Acer cam = `/dev/video0-3`. See `cameras.md` once mounted (still capped 15 Jul).

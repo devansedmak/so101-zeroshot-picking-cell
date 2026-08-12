@@ -1,10 +1,10 @@
-"""Perception: zero-shot open-vocab detection (hosted VLM) → pixel → table homography,
+"""Perception: zero-shot open-vocab detection (hosted VLM) -> pixel -> table homography,
 plus the closed-loop placement verification that gates fulfillment (D9 thesis).
 
 Primary path is the Cyberwave-hosted VLM (Gemini Robotics-ER) via ``detect`` (D10/D13);
 BERT-NER + GroundingDINO remain an offline fallback (reference/old-pickplace.md).
 ``verify_placement`` reuses the same ``detect_points`` call to answer "is it in the bin?".
-``locate_item`` is the composition the loop consumes: capture → detect → homography →
+``locate_item`` is the composition the loop consumes: capture -> detect -> homography ->
 table (X, Y) mm, i.e. the pick target the IK path needs (see locate.py for why).
 ``orient`` adds the *how it is turned* to that *where*, so the wrist can roll and the
 jaws close across a long object instead of end-on.

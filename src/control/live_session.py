@@ -1,10 +1,10 @@
-"""Shared LIVE connect + warm-up → a ready :class:`MotionExecutor`. ⚠ MOVES REAL HARDWARE.
+"""Shared LIVE connect + warm-up -> a ready :class:`MotionExecutor`. MOVES REAL HARDWARE.
 
 The live twin of :mod:`sim_session`: same connect/joint-discovery/warm-up sequence,
 but pinned to ``cw.affect("live")`` so commands reach the physical follower arm via
-the edge driver (see runbook — ``cyberwave edge status`` must show the driver up).
+the edge driver (``cyberwave edge status`` must show the driver up).
 
-SAFETY (CLAUDE.md rule 2). Importing this module moves nothing; only calling
+SAFETY: importing this module moves nothing; only calling
 :func:`open_live_executor` does, and callers must pass ``i_understand_this_moves_real_hardware=True``
 so a live session can never be opened by accident or by a stray import. Every
 entrypoint that uses it must ask the operator for explicit confirmation first and
@@ -12,7 +12,7 @@ must never batch live motions.
 
 Why a separate module rather than a flag on ``sim_session``: a boolean parameter on
 the sim path would make "did this move the real arm?" depend on a call site far from
-the code being read. A distinct import is greppable — ``grep -rn live_session src/``
+the code being read. A distinct import is greppable: ``grep -rn live_session src/``
 enumerates every place that can move hardware.
 """
 
@@ -49,7 +49,7 @@ def open_live_executor(
     from cyberwave import Cyberwave
 
     cw = Cyberwave()
-    cw.affect("live")  # ⚠ real hardware — the physical follower arm will move
+    cw.affect("live")  # real hardware: the physical follower arm will move
     print(f"[live] ⚠ runtime = LIVE (real robot); fetching twin {twin_id} …")
 
     robot = cw.twin(twin_id=twin_id)
@@ -63,7 +63,7 @@ def open_live_executor(
         if len(actual) == len(JOINTS):
             name_map = dict(zip(JOINTS, actual))
             print(f"[live] joint map: {name_map}")
-    except Exception as e:  # noqa: BLE001 — discovery is best-effort; fall back to identity
+    except Exception as e:  # noqa: BLE001, discovery is best-effort; fall back to identity
         print(f"[live] joint-name discovery skipped ({e}); using canonical names")
 
     executor = MotionExecutor(robot, name_map=name_map)
@@ -76,7 +76,7 @@ def open_live_executor(
 
 
 def canonical_joints(state: dict[str, float], name_map: dict[str, str]) -> dict[str, float]:
-    """Translate SDK joint names ("_1".."_6") → canonical keys ("1".."6"), RADIANS → DEGREES.
+    """Translate SDK joint names ("_1".."_6") -> canonical keys ("1".."6"), RADIANS -> DEGREES.
 
     The driver reports encoder positions in radians (visible in its own status table,
     e.g. ``shoulder_lift pos=1.04rad``) while everything above the SDK boundary in this
@@ -95,7 +95,7 @@ def sync_executor_pose(executor: object, robot: object) -> dict[str, float]:
     :class:`MotionExecutor` tracks ``_current_pose`` in memory and starts it at all
     zeros, so a freshly-opened session believes the arm is home no matter where it
     physically is. Ramping from that false start makes the first move a step command
-    instead of a ramp — the arm snaps rather than eases. Reading the real angles first
+    instead of a ramp: the arm snaps rather than eases. Reading the real angles first
     turns the next move back into a genuine interpolation.
 
     Returns the canonical pose it read (empty dict if telemetry was unavailable, in
@@ -119,7 +119,7 @@ def verify_pose(
     Closes a real gap: :meth:`MotionExecutor.execute` publishes to MQTT and prints
     "plan complete" with no acknowledgement from the servos, so a disconnected driver
     (or a clamped/rejected angle) looks exactly like success. On 2026-08-11 that cost
-    a live session — every command "succeeded" while the arm never moved, because the
+    a live session: every command "succeeded" while the arm never moved, because the
     driver had no serial binding. Comparing commanded vs measured is the only honest
     completion signal we have.
 
@@ -130,7 +130,7 @@ def verify_pose(
     if not measured:
         raise RuntimeError(
             "no joint telemetry — cannot confirm the arm actually moved. "
-            "Check `docker logs` for the driver's serial binding (see runbook: 'Ghost arm')."
+            "Check `docker logs` for the driver's serial binding."
         )
     drift: dict[str, float] = {}
     for joint, want in expected.items():
@@ -145,7 +145,7 @@ def verify_pose(
 def read_joints(robot: object) -> dict[str, float]:
     """Best-effort read of the twin's current joint angles (degrees). Moves nothing.
 
-    Returns ``{}`` if the SDK/driver exposes no readable state — an empty result is
+    Returns ``{}`` if the SDK/driver exposes no readable state. An empty result is
     informative in itself (usually: servos unpowered, or telemetry not yet flowing),
     so callers should report it rather than treat it as an error.
     """
@@ -158,7 +158,7 @@ def read_joints(robot: object) -> dict[str, float]:
             continue
         try:
             value = fn()
-        except Exception:  # noqa: BLE001 — try the next accessor
+        except Exception:  # noqa: BLE001, try the next accessor
             continue
         if isinstance(value, dict) and value:
             return {str(k): float(v) for k, v in value.items()}

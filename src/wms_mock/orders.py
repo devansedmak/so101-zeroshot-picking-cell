@@ -1,12 +1,12 @@
-"""Mock WMS order source — emits warehouse orders shaped ``{"item", "bin"}``.
+"""Mock WMS order source: emits warehouse orders shaped ``{"item", "bin"}``.
 
-In-process and network-free by design so the whole order→pick→place→alert loop is
-unit-testable offline (CLAUDE.md D9, sim-first). A real WMS will later POST these
-same-shaped orders to the agent via a Cyberwave **webhook** workflow (see runbook);
+In-process and network-free by design so the whole order -> pick -> place -> alert loop is
+unit-testable offline (sim first). A real WMS will later POST these
+same-shaped orders to the agent via a Cyberwave **webhook** workflow;
 until then :class:`OrderSource` replays a small hardcoded list.
 
 Kept deliberately tiny: an ``Order`` value object + an iterable source. No FastAPI
-yet — swap the source for a webhook handler when the loop is proven in sim.
+yet; swap the source for a webhook handler when the loop is proven in sim.
 """
 
 from __future__ import annotations
@@ -52,7 +52,7 @@ DEMO_ORDERS: list[dict[str, str]] = [
 class OrderSource:
     """Replays a list of order dicts as validated :class:`Order` objects.
 
-    ``for order in OrderSource(): ...`` — deterministic, no network. Defaults to
+    ``for order in OrderSource(): ...``: deterministic, no network. Defaults to
     :data:`DEMO_ORDERS`; pass your own list to drive tests.
     """
 
@@ -67,7 +67,7 @@ class OrderSource:
         return len(self._raw)
 
     def first(self) -> Order:
-        """The first order — handy for single-order sim runs."""
+        """The first order, handy for single-order sim runs."""
         if not self._raw:
             raise ValueError("OrderSource is empty")
         return Order.from_dict(self._raw[0])

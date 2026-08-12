@@ -1,15 +1,15 @@
-"""The three interchangeable demo modes — *same interface, swappable logic*.
+"""The three interchangeable demo modes: *same interface, swappable logic*.
 
 The cell has three physical paper zones (A/B/C in ``hardware/config/bin-regions.json``)
 which are also a **traffic light**: A green, B orange, C red. That one fact is what lets
 the same arm, the same homography and the same verifier tell three different stories:
 
-    order   the order names the destination bin              → route to ``order.bin``
-    qc      the order names no bin; the VLM grades the item  → route by the grade
-    fusion  the order names a bin AND a QC check runs        → a defect DIVERTS to red
+    order   the order names the destination bin              -> route to ``order.bin``
+    qc      the order names no bin; the VLM grades the item  -> route by the grade
+    fusion  the order names a bin AND a QC check runs        -> a defect DIVERTS to red
             and raises an alert explaining why the item did not go where it was ordered
 
-Everything here is **pure** — no I/O, no SDK, no camera — so the routing policy is
+Everything here is **pure** (no I/O, no SDK, no camera), so the routing policy is
 unit-testable on its own and the mock driver and a real run share exactly one
 implementation of "where does this item go?" (:func:`route`).
 """
@@ -23,7 +23,7 @@ from typing import Any, Mapping
 MODES: tuple[str, ...] = ("order", "qc", "fusion")
 DEFAULT_MODE = "order"
 
-#: QC grades, best → worst. ``pass`` is the only one that is not a defect.
+#: QC grades, best to worst. ``pass`` is the only one that is not a defect.
 GRADES: tuple[str, ...] = ("pass", "review", "reject")
 
 
@@ -51,14 +51,14 @@ class Zone:
         }
 
 
-#: label → Zone. Labels are the *existing* bin labels, so QC mode needs no new calibration.
+#: label -> Zone. Labels are the *existing* bin labels, so QC mode needs no new calibration.
 ZONES: dict[str, Zone] = {
     "A": Zone("A", "green", "#22c55e", "pass", "PASS — ready to ship"),
     "B": Zone("B", "orange", "#f59e0b", "review", "REVIEW — needs a human"),
     "C": Zone("C", "red", "#ef4444", "reject", "REJECT — quarantine"),
 }
 
-#: grade → zone label (the traffic light).
+#: grade -> zone label (the traffic light).
 ZONE_FOR_GRADE: dict[str, str] = {z.grade: label for label, z in ZONES.items()}
 
 REJECT_ZONE = ZONE_FOR_GRADE["reject"]
@@ -111,7 +111,7 @@ class QCVerdict:
 
 @dataclass(frozen=True)
 class Routing:
-    """Where the item goes, and why — the one thing the three modes disagree about."""
+    """Where the item goes, and why: the one thing the three modes disagree about."""
 
     mode: str
     bin: str  # the destination the arm will actually place into
@@ -181,7 +181,7 @@ def route(
     order_bin: str | None = None,
     qc: QCVerdict | None = None,
 ) -> Routing:
-    """Decide the destination for one item under ``mode`` — the whole mode difference.
+    """Decide the destination for one item under ``mode``: the whole mode difference.
 
     ``order`` needs ``order_bin``; ``qc`` needs ``qc`` and ignores ``order_bin``;
     ``fusion`` needs both. Raises :class:`ModeError` when a required input is missing,

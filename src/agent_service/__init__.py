@@ -1,12 +1,12 @@
-"""Agent service: the order→pick→place→verify→alert loop.
+"""Agent service: the order -> pick -> place -> verify -> alert loop.
 
-``fulfill_order`` closes the loop when a ``verify`` callable is injected (the thesis,
-decisions.md D9): failed verification retries once, then raises an ERROR alert. Without
+``fulfill_order`` closes the loop when a ``verify`` callable is injected (the project
+thesis): failed verification retries once, then raises an ERROR alert. Without
 a verifier it stays the perception-free walking skeleton on hardcoded poses.
 
 Where it picks is injected the same way: a ``resolve_pick`` callable ``(order) ->
 PickChoice``. ``run_order --perceive`` supplies one backed by ``perception.locate_item``
-(VLM → homography → IK) that degrades to the hardcoded pose table with a warning.
+(VLM -> homography -> IK) that degrades to the hardcoded pose table with a warning.
 
 ``order_api`` is the *order-driven* front door: a stdlib webhook receiver whose
 ``POST /orders`` runs one order through this same loop (``python -m

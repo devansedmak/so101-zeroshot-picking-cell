@@ -1,8 +1,8 @@
-"""Unit tests for the walking-skeleton loop: order parsing + order→pick→place→alert.
+"""Unit tests for the walking-skeleton loop: order parsing + order -> pick -> place -> alert.
 
 Pure logic, no hardware/network. Uses a fake robot that records both joint commands
 (mirrors tests/test_motion.py) and alert calls, so the whole loop is offline-testable.
-Run with PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 (see runbook).
+Run with PYTEST_DISABLE_PLUGIN_AUTOLOAD=1.
 """
 
 from __future__ import annotations
@@ -114,7 +114,7 @@ def test_build_fulfilled_alert_payload():
     assert alert["alert_type"] == "order_fulfilled"
     assert alert["severity"] == "info"
     assert alert["category"] == "business"
-    assert "message" not in alert  # real SDK has no 'message' kwarg — details go in description
+    assert "message" not in alert  # real SDK has no 'message' kwarg; details go in description
     assert "red marker" in alert["description"] and "A" in alert["description"]
 
 

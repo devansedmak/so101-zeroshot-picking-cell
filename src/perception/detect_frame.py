@@ -1,11 +1,11 @@
-"""Zero-shot detect on a still frame — perception entrypoint (VLM optional).
+"""Zero-shot detect on a still frame: perception entrypoint (VLM optional).
 
 Runs the hosted VLM's ``detect_points`` on an image and prints where an item is,
-in pixels. **Default is dry-run** (parses a bundled sample response — no network, no
+in pixels. **Default is dry-run** (parses a bundled sample response, no network, no
 credits), so the parsing/coordinate math is demoable offline. ``--run`` makes the real
 VLM call; ``--save out.png`` writes an annotated overlay.
 
-This is the offline-provable half of the loop seam (decisions.md D10/D13): the pixel
+This is the offline-provable half of the loop seam: the pixel
 it prints is what planar homography will turn into a table coordinate for the pick.
 
 Usage:

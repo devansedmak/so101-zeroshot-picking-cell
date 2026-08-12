@@ -1,8 +1,8 @@
-"""Unit tests for the pixel→table planar homography (pure numpy, no camera).
+"""Unit tests for the pixel -> table planar homography (pure numpy, no camera).
 
 Covers exact recovery (affine + projective), the <2 cm ship bar via reprojection
 error, round-trip inverse, degenerate-input guards, and JSON save/load.
-Run with PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 (see runbook).
+Run with PYTEST_DISABLE_PLUGIN_AUTOLOAD=1.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from src.perception import Homography, ReprojectionError
 
 
 def test_recovers_affine_scale_and_offset():
-    # world = 0.5 * pixel + (10, 20) — a clean, hand-computable mapping.
+    # world = 0.5 * pixel + (10, 20): a clean, hand-computable mapping.
     def truth(px, py):
         return (0.5 * px + 10.0, 0.5 * py + 20.0)
 
@@ -58,7 +58,7 @@ def test_recovers_a_true_projective_map():
 
 
 def test_reprojection_error_flags_2cm_tolerance():
-    # world in mm; perfect fit → within 2 cm; injected 30 mm outlier → not within.
+    # world in mm; perfect fit -> within 2 cm; injected 30 mm outlier -> not within.
     pix = [(0, 0), (200, 0), (200, 200), (0, 200), (100, 100)]
     world = [(0, 0), (400, 0), (400, 400), (0, 400), (200, 200)]  # world = 2*pixel
     h = Homography.fit(pix, world)

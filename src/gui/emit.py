@@ -1,4 +1,4 @@
-"""Bridge a **real** ``run_order`` execution into the dashboard — without touching it.
+"""Bridge a **real** ``run_order`` execution into the dashboard, without touching it.
 
 The least invasive route that exists: ``src.agent_service.run_order`` is not imported,
 not monkey-patched and not edited. It already narrates itself on stdout, in a small and
@@ -7,11 +7,11 @@ stable vocabulary (``▶ order:``, ``💬 picking``, ``✅ plan complete``, ``�
 lines and writes the dashboard's events to a **JSONL file**; the dashboard tails that
 file. Two processes, one append-only file, zero coupling::
 
-    # terminal 1 — the real run, piped through the translator
+    # terminal 1: the real run, piped through the translator
     .venv/bin/python -m src.agent_service.run_order --verify --verify-fail 1 2>&1 \
       | .venv/bin/python -m src.gui.emit --out run-events.jsonl
 
-    # terminal 2 — the dashboard, following that file
+    # terminal 2: the dashboard, following that file
     .venv/bin/python tools/dashboard.py --follow run-events.jsonl
 
 The translator echoes every line it reads straight back to stdout, so the operator still
@@ -19,7 +19,7 @@ watches the run exactly as before; the JSONL is a side effect.
 
 **The honest part.** ``run_order`` has no encoder read-back: ``MotionExecutor.execute``
 publishes to MQTT and prints "plan complete" whether or not a servo ever moved. So this
-translator renders a real run's PICK/PLACE as **COMMANDED** and *never* as VERIFIED —
+translator renders a real run's PICK/PLACE as **COMMANDED** and *never* as VERIFIED:
 there is nothing in that output that could justify green. Anything that *does* have
 telemetry (``control.live_session.verify_pose``) can append its own
 ``{"kind": "motion", "state": "verified"|"mismatch"|"unverified", ...}`` line to the same
@@ -43,7 +43,7 @@ from typing import Any, Iterable, Iterator, Sequence
 from .events import ev, motion_event, stage_event
 from .modes import DEFAULT_MODE, check_mode
 
-#: Default event file. Kept out of the repo (see .gitignore note in the runbook).
+#: Default event file. Kept out of the repo (it is gitignored).
 DEFAULT_EVENT_PATH = Path("run-events.jsonl")
 
 #: What ``run_order`` says versus what the dashboard draws. Anchored on the emoji the
@@ -76,7 +76,7 @@ def _f(value: str) -> float:
 
 
 class RunOrderTranslator:
-    """``run_order`` stdout → dashboard events. Pure, line at a time, never raises.
+    """``run_order`` stdout -> dashboard events. Pure, line at a time, never raises.
 
     Stateful only in the way the output is: it remembers which move is in flight (so
     ``plan complete`` closes the right stage), which attempt it is on, and whether a
@@ -109,7 +109,7 @@ class RunOrderTranslator:
         """Translate one line. Returns zero or more events (never raises)."""
         try:
             return self._feed(line.rstrip("\r\n"))
-        except Exception:  # noqa: BLE001 — a weird line must never break the bridge
+        except Exception:  # noqa: BLE001, a weird line must never break the bridge
             return []
 
     def _feed(self, line: str) -> list[dict[str, Any]]:
@@ -205,7 +205,7 @@ class RunOrderTranslator:
     def _move(self, stage: str, detail: str) -> list[dict[str, Any]]:
         events: list[dict[str, Any]] = []
         if stage == "PICK" and not self.detected:
-            # No perceived point reached this pick — either --perceive is off, or it
+            # No perceived point reached this pick: either --perceive is off, or it
             # degraded to the pose table. Say so rather than letting DETECT/LOCATE
             # quietly go green for work that never happened.
             events += [
@@ -280,7 +280,7 @@ class RunOrderTranslator:
 
 # ---------------------------------------------------------------- writing
 class EventLog:
-    """Append-only JSONL writer — one event per line, flushed immediately.
+    """Append-only JSONL writer: one event per line, flushed immediately.
 
     Flushing every line is the whole point: the dashboard is tailing this file live, and
     a buffered writer would make the demo lag a stage behind the arm.
@@ -366,7 +366,7 @@ def tail_lines(
                 size = p.stat().st_size
             except OSError:
                 size = -1
-            if size < pos:  # truncated or replaced → start over
+            if size < pos:  # truncated or replaced -> start over
                 handle.close()
                 handle = None
                 continue
@@ -386,7 +386,7 @@ def read_events(path: str | Path) -> list[dict[str, Any]]:
 
 
 def parse_events(lines: Iterable[str]) -> list[dict[str, Any]]:
-    """JSONL lines → event dicts, silently skipping anything unparseable."""
+    """JSONL lines -> event dicts, silently skipping anything unparseable."""
     events: list[dict[str, Any]] = []
     for line in lines:
         event = parse_event(line)

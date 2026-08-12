@@ -2,9 +2,9 @@
 
 Covers the geometry (bin rectangles + point-in-bin), the three verdicts the loop's
 retry policy branches on, the JSON calibration round-trip, and the fake-client wiring
-for ``verify_placement`` — including that the VLM's ``[y, x]`` / 0-1000 convention
+for ``verify_placement``, including that the VLM's ``[y, x]`` / 0-1000 convention
 still lands on the right pixels here (it is reused from detect.parse_detections, never
-re-derived). Run with PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 (see runbook).
+re-derived). Run with PYTEST_DISABLE_PLUGIN_AUTOLOAD=1.
 """
 
 from __future__ import annotations
@@ -153,7 +153,7 @@ class FakeClient:
 
 
 def test_verify_placement_ok_and_yx_convention():
-    # VLM point [y=150, x=200] on the 0-1000 grid → px (200, 150) on a 1000x1000 frame
+    # VLM point [y=150, x=200] on the 0-1000 grid -> px (200, 150) on a 1000x1000 frame
     client = FakeClient([{"point": [150, 200], "label": "red marker"}])
     res = verify_placement(
         client, "frame.jpg", "red marker", BIN_A, model="m", image_size=(1000, 1000)
@@ -166,7 +166,7 @@ def test_verify_placement_ok_and_yx_convention():
 
 
 def test_verify_placement_yx_swap_would_land_outside():
-    # same numbers in [x, y] order (the bug this convention guards against) → outside
+    # same numbers in [x, y] order (the bug this convention guards against) -> outside
     client = FakeClient([{"point": [200, 150], "label": "red marker"}])
     res = verify_placement(
         client,
@@ -186,7 +186,7 @@ def test_verify_placement_empty_output_is_not_ok():
 
 
 def test_verify_placement_scales_to_frame_size():
-    # point [y=500, x=500] on a 1280x720 frame → px (640, 360)
+    # point [y=500, x=500] on a 1280x720 frame -> px (640, 360)
     client = FakeClient([{"point": [500, 500]}])
     res = verify_placement(
         client,

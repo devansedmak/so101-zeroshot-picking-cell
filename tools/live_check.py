@@ -1,4 +1,4 @@
-"""⚠ LIVE hardware bring-up checks for the SO-101 follower. RUN THIS YOURSELF.
+"""LIVE hardware bring-up checks for the SO-101 follower. RUN THIS YOURSELF.
 
 Three deliberately tiny steps, each a separate invocation, in this order:
 
@@ -15,7 +15,7 @@ Three deliberately tiny steps, each a separate invocation, in this order:
 
 SAFETY: every motion subcommand refuses to run without ``--yes``,
 prints exactly what it is about to do, and pauses for a typed confirmation. Steps are
-never batched — one invocation, one small motion. Keep a hand near the follower's PSU
+never batched: one invocation, one small motion. Keep a hand near the follower's PSU
 switch. If anything looks wrong, Ctrl-C and cut power.
 
 Why hover at z=+50 by default: the kinematic frame is not yet validated against the
@@ -51,10 +51,10 @@ from src.control.motion import (  # noqa: E402
 from src.control.sim_session import load_env  # noqa: E402
 
 # This probe ANSWERED the gripper-direction question on 2026-08-11: the sweep below was
-# observed as fully open (110°) → half closed (60°) → almost shut (10°) → fully open, and
+# observed as fully open (110°) -> half closed (60°) -> almost shut (10°) -> fully open, and
 # the jaws pushed shut by hand read 6.1° on the encoder. HIGH = OPEN, LOW = SHUT, on the
-# follower's calibrated 0° → 128.9° span. poses.GRIPPER_OPEN/CLOSE are now 105°/10° and
-# DEFAULT_JOINT_LIMITS["6"] is 0→124 (hardware/config/joint-ranges.md §gripper), so this
+# follower's calibrated 0° to 128.9° span. poses.GRIPPER_OPEN/CLOSE are now 105°/10° and
+# DEFAULT_JOINT_LIMITS["6"] is 0 to 124 (hardware/config/joint-ranges.md §gripper), so this
 # probe is kept only as a re-verification tool after a re-calibration or a re-pair.
 GRIPPER_LIMITS = (0.0, 124.0)
 GRIPPER_PROBE_ANGLES = (110.0, 60.0, 10.0, 110.0)
@@ -173,12 +173,12 @@ def cmd_hover(args: argparse.Namespace) -> None:
     executor, robot = open_live_executor(
         _twin_id(), i_understand_this_moves_real_hardware=True
     )
-    # Ramp from where the arm ACTUALLY is, not from the executor's assumed all-zeros —
+    # Ramp from where the arm ACTUALLY is, not from the executor's assumed all-zeros;
     # otherwise every fresh session's first move is a step command, not a ramp.
     sync_executor_pose(executor, robot)
     # Drop joint 6 (gripper): solve_ik fills it with GRIPPER_OPEN, and this test is about
     # where the TIP lands, not about the jaws. Omitting it leaves them where the operator
-    # left them — which the executor now actually honours: until 2026-08-11 it merged the
+    # left them, which the executor now actually honours: until 2026-08-11 it merged the
     # pose into its assumed all-zeros state and commanded joint 6 to 0° (= SHUT) anyway,
     # which is how this very call was observed closing the gripper. See motion._ramp_to.
     arm_pose = {j: v for j, v in joints.items() if j != "6"}
@@ -197,11 +197,11 @@ def cmd_hover(args: argparse.Namespace) -> None:
 
 
 def cmd_home(args: argparse.Namespace) -> None:
-    """Ease joints 1–5 back to 0° — the arm's stable extended-horizontal rest pose.
+    """Ease joints 1-5 back to 0°: the arm's stable extended-horizontal rest pose.
 
     Deliberately leaves joint 6 alone: 0° is the SHUT end of the gripper's calibrated
-    0→128.9° span (confirmed 2026-08-11), so homing it would clamp the jaws on whatever
-    they happen to be around — including an item mid-carry.
+    0 to 128.9° span (confirmed 2026-08-11), so homing it would clamp the jaws on whatever
+    they happen to be around, including an item mid-carry.
     """
     _confirm(
         f"Ease joints 1–5 back to 0° over {args.duration:.1f}s (arm extended, horizontal).\n"
@@ -226,7 +226,7 @@ def cmd_home(args: argparse.Namespace) -> None:
 
 
 def cmd_joint(args: argparse.Namespace) -> None:
-    """Move ONE joint to ONE angle — the probe for resolving a sign/zero convention."""
+    """Move ONE joint to ONE angle: the probe for resolving a sign/zero convention."""
     lo, hi = DEFAULT_JOINT_LIMITS[args.joint]
     if not (lo <= args.angle <= hi):
         sys.exit(f"refusing: joint {args.joint} angle {args.angle}° is outside limits [{lo}, {hi}]")

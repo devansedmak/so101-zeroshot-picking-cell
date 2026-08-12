@@ -1,27 +1,27 @@
-"""Calibrate the pixel→table homography — the highest-risk hardware step.
+"""Calibrate the pixel -> table homography: the highest-risk hardware step.
 
 WHY a dedicated tool: `src/perception/homography.py` already has the math (DLT +
 Hartley, unit-tested offline), but tomorrow morning there is exactly ONE short
-hardware window. Everything that could go wrong then — a display that won't open, a
+hardware window. Everything that could go wrong then (a display that won't open, a
 mistyped millimetre, a silently bad fit that only shows up as the gripper missing by
-5 cm — has to be impossible or loud. So:
+5 cm) has to be impossible or loud. So:
 
 * **Three ways in, one way out.** Interactive clicking, `--points` on the command
   line, and `--points-file` all converge on :func:`fit_and_report`. If the GUI
   misbehaves, retype four numbers and keep going; nothing is display-gated.
 * **The ship bar is enforced, not printed.** `max` reprojection error must be
-  ≤ 20 mm (2 cm, cameras.md checkpoint). A failing fit is REFUSED, not saved —
+  ≤ 20 mm (2 cm, cameras.md checkpoint). A failing fit is REFUSED, not saved:
   a saved-but-wrong homography is worse than no homography, because the loop
   would trust it. `--force` exists for "I know, I'll fix it later".
 * **`--selftest` proves the whole path with no camera and no display**, so the
   tool is known-good the night before.
 
 PHYSICAL TARGET (do this, don't improvise): print/tape a sheet with 4 marked
-corners of known spacing on the mat — A4 landscape = 297 × 210 mm, A3 = 420 × 297 mm.
+corners of known spacing on the mat. A4 landscape = 297 × 210 mm, A3 = 420 × 297 mm.
 No checkerboard detection code exists: you just click the corners. Put the sheet's
 **origin corner at the arm base**, +X pointing away from the arm, +Y to the arm's
 left, so the homography world frame IS the IK base frame (see
-hardware/config/link-lengths.md §Frame convention — `src/control/ik.py` assumes it).
+hardware/config/link-lengths.md §Frame convention; `src/control/ik.py` assumes it).
 Then `--sheet 297,210` assigns the mm coordinates for you and you type nothing.
 
 CLI:
@@ -76,7 +76,7 @@ _MAX_DISPLAY = (1280, 720)
 
 # ------------------------------------------------------------------ parsing
 def _parse_xy(text: str, *, what: str, context: str) -> tuple[float, float]:
-    """Parse ``"12,34"`` / ``"12 34"`` → ``(12.0, 34.0)``."""
+    """Parse ``"12,34"`` / ``"12 34"`` -> ``(12.0, 34.0)``."""
     parts = [p for p in text.replace(",", " ").split() if p]
     if len(parts) != 2:
         raise ValueError(f"{what} needs exactly 2 numbers, got {text.strip()!r} in {context!r}")
@@ -87,7 +87,7 @@ def _parse_xy(text: str, *, what: str, context: str) -> tuple[float, float]:
 
 
 def parse_point_spec(spec: str) -> Pair:
-    """Parse one correspondence ``"px,py=X,Y"`` → ``((px, py), (X, Y))``.
+    """Parse one correspondence ``"px,py=X,Y"`` -> ``((px, py), (X, Y))``.
 
     Left of the separator is the **pixel** in the overhead frame, right is the
     **table coordinate in mm**. ``=``, ``->`` and ``:`` all work as separators.
@@ -116,7 +116,7 @@ def _pair_from_row(row: Sequence[float], context: str) -> Pair:
 
 
 def parse_points_file(path: str | Path) -> list[Pair]:
-    """Read correspondences from JSON or CSV — the keyboard-only path.
+    """Read correspondences from JSON or CSV: the keyboard-only path.
 
     JSON: ``{"points": [...]}`` or a bare list, whose items are either
     ``{"pixel": [px, py], "world": [X, Y]}`` or ``[px, py, X, Y]``.
@@ -163,7 +163,7 @@ def parse_points_file(path: str | Path) -> list[Pair]:
 def sheet_world_points(width_mm: float, height_mm: float) -> list[tuple[float, float]]:
     """Table mm for the 4 corners of a ``width × height`` sheet, in click order.
 
-    Order is origin → +X → diagonal → +Y, i.e. ``(0,0), (W,0), (W,H), (0,H)``.
+    Order is origin -> +X -> diagonal -> +Y, i.e. ``(0,0), (W,0), (W,H), (0,H)``.
     Origin corner goes at the arm base (link-lengths.md §Frame convention).
     """
     if width_mm <= 0 or height_mm <= 0:
@@ -181,13 +181,13 @@ def fit_and_report(
     force: bool = False,
     note: str = "",
 ) -> tuple[bool, Homography | None, Path | None]:
-    """Fit → print per-point error → PASS/FAIL vs ``tolerance`` → save (or refuse).
+    """Fit -> print per-point error -> PASS/FAIL vs ``tolerance`` -> save (or refuse).
 
     THE one code path all three input modes share, and the one `--selftest` exercises.
     Returns ``(passed, homography, saved_path)``; ``saved_path`` is ``None`` when
     nothing was written (fit failed, bar not met without ``--force``, or
-    ``out_path=None``). Never raises on a bad fit — prints and returns
-    ``(False, None, None)`` — because a stack trace at 8 a.m. helps nobody.
+    ``out_path=None``). Never raises on a bad fit; it prints and returns
+    ``(False, None, None)``, because a stack trace at 8 a.m. helps nobody.
     """
     print(f"[calib] {len(pairs)} correspondences (pixel → table mm):")
     for i, (pix, world) in enumerate(pairs, start=1):
@@ -270,14 +270,14 @@ def gui_unavailable_reason(*, timeout_s: float = 20.0) -> str | None:
     """``None`` if an OpenCV window can actually open, else why it cannot.
 
     WHY a subprocess: when the Qt platform plugin cannot reach the display, OpenCV
-    **aborts the whole process** (SIGABRT) — a Python ``try/except`` cannot save us, so
+    **aborts the whole process** (SIGABRT), and a Python ``try/except`` cannot save us, so
     the interactive path would die with a core dump instead of telling Devan to use
     ``--points``. Probing in a child process makes that failure survivable and loud.
     """
     if not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
         return "no DISPLAY / WAYLAND_DISPLAY (headless shell or ssh without X forwarding)"
     try:
-        proc = subprocess.run(  # noqa: S603 — fixed argv, no shell
+        proc = subprocess.run(  # noqa: S603, fixed argv, no shell
             [sys.executable, "-c", _GUI_PROBE_CODE],
             capture_output=True, text=True, timeout=timeout_s, check=False,
         )
@@ -305,7 +305,7 @@ def click_points(
     ``fallback_hint`` is the "do this instead" text every no-GUI error ends with, so
     each tool can name its own keyboard-only flags. The frame is downscaled to fit
     ``max_display`` and clicks are divided back out, because an OpenCV
-    ``WINDOW_NORMAL`` reports *window* coordinates — resizing a window would
+    ``WINDOW_NORMAL`` reports *window* coordinates, and resizing a window would
     silently corrupt a calibration. Every click is echoed to the terminal so the
     numbers survive even if the window is unreadable.
 
@@ -313,8 +313,8 @@ def click_points(
         RuntimeError: OpenCV missing, no usable GUI/display, or aborted with ESC.
     """
     try:
-        import cv2  # noqa: PLC0415 — optional GUI backend, probed at call time
-    except ImportError as e:  # pragma: no cover — opencv is a project dependency
+        import cv2  # noqa: PLC0415, optional GUI backend, probed at call time
+    except ImportError as e:  # pragma: no cover, opencv is a project dependency
         raise RuntimeError(
             "opencv-python is not installed, so there is no GUI. "
             f"{fallback_hint} To get the GUI: .venv/bin/pip install opencv-python"
@@ -369,7 +369,7 @@ def click_points(
             if key in (ord("u"), 8) and picked:  # u / BACKSPACE
                 dropped = picked.pop()
                 print(f"[click]   undo ({dropped[0]:.1f}, {dropped[1]:.1f})")
-    except Exception as e:  # noqa: BLE001 — cv2.error has no useful common base
+    except Exception as e:  # noqa: BLE001, cv2.error has no useful common base
         if isinstance(e, RuntimeError):
             raise
         raise RuntimeError(
@@ -379,7 +379,7 @@ def click_points(
         try:
             cv2.destroyWindow(window)
             cv2.waitKey(1)
-        except Exception:  # noqa: BLE001, S110 — teardown must never mask the result
+        except Exception:  # noqa: BLE001, S110; teardown must never mask the result
             pass
     return picked
 
@@ -418,7 +418,7 @@ def _grab_frame(device: str | None, warmup: int) -> Path:
 # ------------------------------------------------------------------ selftest
 def _synthetic_pairs(noise_mm: float = 1.5) -> list[Pair]:
     """A genuinely projective ground truth + deterministic sub-bar noise."""
-    import numpy as np  # noqa: PLC0415 — only the selftest needs it directly
+    import numpy as np  # noqa: PLC0415, only the selftest needs it directly
 
     h_true = np.array([[1.9, 0.06, -55.0], [-0.04, 1.85, -40.0], [0.0004, -0.0002, 1.0]])
     pixels = [(120.0, 90.0), (1160.0, 105.0), (1180.0, 640.0), (140.0, 620.0),
@@ -433,7 +433,7 @@ def _synthetic_pairs(noise_mm: float = 1.5) -> list[Pair]:
 
 
 def selftest() -> int:
-    """Run fit → error → PASS/FAIL → save on synthetic points. No camera, no display."""
+    """Run fit -> error -> PASS/FAIL -> save on synthetic points. No camera, no display."""
     print("=" * 72)
     print("SELFTEST tools/calibrate_homography.py — synthetic points, no camera/display")
     print("=" * 72)

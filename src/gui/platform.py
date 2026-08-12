@@ -2,25 +2,25 @@
 
 Two things the video has to prove, and one thing it must never fake:
 
-* **Identity** — the header shows the environment id, the twin id and the runtime
+* **Identity**: the header shows the environment id, the twin id and the runtime
   (MOCK / SIMULATION / LIVE) it is actually running as, read from ``.env``. No network
   needed, so it is always there.
-* **Alerts** — every alert the dashboard raises is shown in the UI *and*, when the run is
+* **Alerts**: every alert the dashboard raises is shown in the UI *and*, when the run is
   real, dispatched through the already-verified surface in
   :mod:`src.agent_service.alerts` (``robot.alerts.create(name, description=..., severity=...,
-  source_type=...)`` — note there is no ``message`` kwarg) so the same alert lands in the
+  source_type=...)``, note there is no ``message`` kwarg) so the same alert lands in the
   Cyberwave alerts view while the camera is rolling.
-* **Never fake it** — in ``--mock`` nothing is sent, and every alert card is stamped
+* **Never fake it**: in ``--mock`` nothing is sent, and every alert card is stamped
   "MOCK — not sent". A mock alert can never be mistaken for a real one.
 
 Everything network here is **lazy, threaded and swallowed**: connecting happens on a
 background thread, sending happens on a worker queue, and a DNS/MQTT failure (we had one
 on ``mqtt.cyberwave.com`` tonight) degrades the badge to OFFLINE without blocking a single
-pipeline stage. The dashboard is a viewer — it never moves the robot and never calls
+pipeline stage. The dashboard is a viewer: it never moves the robot and never calls
 ``cw.affect("live")``.
 
 SDK note (verified offline against cyberwave 0.5.3): the client exposes no ``workflows``
-attribute, so the ``cw.workflows.trigger(...)`` surface recorded in the runbook could not
+attribute, so the ``cw.workflows.trigger(...)`` surface documented for the platform could not
 be verified here. This module therefore **does not trigger workflows**; it only displays
 the configured identity. See the dashboard's report/README note.
 """
@@ -36,7 +36,7 @@ from typing import Any, Callable
 #: Where a viewer goes to see the same alerts (shown as a link in the header).
 DASHBOARD_URL = "https://cyberwave.com/dashboard"
 
-#: Runtime badges. LIVE is *display only* here — this module never drives hardware.
+#: Runtime badges. LIVE is *display only* here: this module never drives hardware.
 RUNTIMES: tuple[str, ...] = ("MOCK", "SIMULATION", "LIVE")
 
 #: alerts.create's source_type per runtime (see agent_service.alerts docstring).
@@ -58,13 +58,13 @@ def load_env() -> None:
         from dotenv import load_dotenv
 
         load_dotenv()
-    except ImportError:  # pragma: no cover — python-dotenv is a project dependency
+    except ImportError:  # pragma: no cover, python-dotenv is a project dependency
         pass
 
 
 @dataclass
 class PlatformIdentity:
-    """What the header shows. Pure config — no network, always available."""
+    """What the header shows. Pure config: no network, always available."""
 
     environment_id: str | None = None
     twin_id: str | None = None
@@ -106,7 +106,7 @@ class PlatformLink:
     enabled: bool = False
     identity: PlatformIdentity = field(default_factory=PlatformIdentity)
     source_type: str | None = None
-    #: Connect and show the real identity, but PRINT alerts instead of creating them —
+    #: Connect and show the real identity, but PRINT alerts instead of creating them,
     #: for rehearsing against the platform without filling its alert view.
     dry_run: bool = False
 
@@ -152,7 +152,7 @@ class PlatformLink:
             "failed": failed,
             "identity": self.identity.to_dict(),
             # Honest about the one thing we could not verify (SDK 0.5.3 has no
-            # client.workflows) — the header links to the dashboard instead.
+            # client.workflows). The header links to the dashboard instead.
             "workflow_trigger": False,
         }
 
@@ -182,8 +182,8 @@ class PlatformLink:
             from cyberwave import Cyberwave  # lazy: --mock never imports the SDK
 
             cw = Cyberwave()
-            # SAFETY (CLAUDE.md rule 2): the dashboard is a viewer. Pin SIMULATION and
-            # never call affect("live") — nothing here commands a joint either way.
+            # SAFETY: the dashboard is a viewer. Pin SIMULATION and
+            # never call affect("live"); nothing here commands a joint either way.
             cw.affect("simulation")
             robot = cw.twin(twin_id=twin_id)
             with self._lock:
@@ -192,7 +192,7 @@ class PlatformLink:
             if name:
                 self.identity.twin_name = str(name)
             self._set(STATUS_CONNECTED)
-        except Exception as e:  # noqa: BLE001 — DNS/MQTT flakiness is expected, not fatal
+        except Exception as e:  # noqa: BLE001, DNS/MQTT flakiness is expected, not fatal
             self._set(STATUS_OFFLINE, f"{type(e).__name__}: {e}")
 
     # ---------------------------------------------------------------- alerts
@@ -253,7 +253,7 @@ class PlatformLink:
                 "detail": "sent to Cyberwave" if dispatched else "not dispatched",
                 "source_type": self.source_type,
             }
-        except Exception as e:  # noqa: BLE001 — an alert failure must not break the demo
+        except Exception as e:  # noqa: BLE001, an alert failure must not break the demo
             with self._lock:
                 self._failed += 1
             self._set(STATUS_OFFLINE, f"{type(e).__name__}: {e}")
@@ -261,7 +261,7 @@ class PlatformLink:
 
 
 def preview_alert(payload: dict[str, Any], source_type: str = "simulation") -> str:
-    """Render what *would* be sent — the --dry-run path, so verifying costs no real alert."""
+    """Render what *would* be sent: the --dry-run path, so verifying costs no real alert."""
     lines = [f"[platform] would create alert (source_type={source_type}):"]
     for key in ("name", "severity", "alert_type", "category", "description"):
         if payload.get(key):

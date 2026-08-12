@@ -1,11 +1,11 @@
-"""Unit tests for the mock-WMS webhook receiver (``POST /orders`` → the agent loop).
+"""Unit tests for the mock-WMS webhook receiver (``POST /orders`` -> the agent loop).
 
 Hermetic: a real :class:`ThreadingHTTPServer` bound to **port 0 on loopback** (so the OS
 picks a free port and nothing leaves the machine) driven with ``http.client``. No
-hardware, no Cyberwave SDK, no outbound network — the runner is injected, exactly the
+hardware, no Cyberwave SDK, no outbound network: the runner is injected, exactly the
 seam ``order_api.make_handler`` exists for.
 
-Run with PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 (see runbook).
+Run with PYTEST_DISABLE_PLUGIN_AUTOLOAD=1.
 """
 
 from __future__ import annotations
@@ -191,7 +191,7 @@ def test_non_object_body_returns_422():
 
 
 def test_unknown_item_returns_conflict_with_reason():
-    """End-to-end through the REAL loop: a valid order the cell can't fulfil ⇒ 409."""
+    """End-to-end through the REAL loop: a valid order the cell can't fulfil gives 409."""
     robot = FakeRobot()
     executor = MotionExecutor(robot, dry_run=True)
 

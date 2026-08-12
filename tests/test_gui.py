@@ -1,19 +1,19 @@
-"""Unit tests for the demo dashboard (src/gui) — everything except the pixels.
+"""Unit tests for the demo dashboard (src/gui): everything except the pixels.
 
 The page itself is deliberately dumb: it draws ``DashboardApp.snapshot()`` and nothing
 else, so all the behaviour worth testing is Python. Covered here:
 
-* **mode routing** — the one thing order/qc/fusion disagree about, including the fusion
+* **mode routing**: the one thing order/qc/fusion disagree about, including the fusion
   diversion and the alert it raises;
-* **the event state machine** — folding, derived stage timing, and the guarantee that a
+* **the event state machine**: folding, derived stage timing, and the guarantee that a
   malformed event is dropped rather than fatal;
-* **the four motion states** — the honesty rule this dashboard exists for: a commanded
+* **the four motion states**: the honesty rule this dashboard exists for, a commanded
   move must never be able to render as a verified one (2026-08-11 ghost-arm session);
-* **JSON shapes** — the keys the page indexes into, and the overlay geometry;
-* **the run_order bridge** — real stdout → events, with no import of run_order at all;
-* **the HTTP surface** — on a real socket, since that is how the demo is served.
+* **JSON shapes**: the keys the page indexes into, and the overlay geometry;
+* **the run_order bridge**: real stdout -> events, with no import of run_order at all;
+* **the HTTP surface**: on a real socket, since that is how the demo is served.
 
-Run with PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 (see runbook). No network, no camera, no SDK.
+Run with PYTEST_DISABLE_PLUGIN_AUTOLOAD=1. No network, no camera, no SDK.
 """
 
 from __future__ import annotations
@@ -126,7 +126,7 @@ def test_fusion_review_diverts_to_orange_with_a_warning():
 
 
 def test_fusion_pass_into_the_same_zone_raises_no_alert():
-    # Ordered to C and graded reject → destination unchanged, so nothing was "diverted".
+    # Ordered to C and graded reject -> destination unchanged, so nothing was "diverted".
     r = route("fusion", item="eraser", order_bin="C", qc=QCVerdict("reject", "torn"))
     assert (r.bin, r.diverted, r.alert) == ("C", False, None)
 
@@ -352,7 +352,7 @@ def test_mock_mode_sends_nothing_and_says_so():
 
 
 def test_an_alert_raised_by_the_run_itself_is_not_re_sent():
-    """run_order already called robot.alerts.create — relaying would duplicate it."""
+    """run_order already called robot.alerts.create; relaying would duplicate it."""
     sent: list[dict] = []
     link = PlatformLink(runtime="SIMULATION", enabled=True)
     link.send = lambda payload, done: sent.append(payload)  # type: ignore[assignment]
@@ -399,7 +399,7 @@ def test_qc_mode_order_carries_no_bin_but_the_run_still_routes():
     for beat in build_script("qc", "ok", SCENARIOS["qc"][2]):  # the "reject" scenario
         st.apply_all(beat.events)
     assert st.order["bin"] is None
-    assert st.routing["bin"] == "C"  # graded reject → the red zone
+    assert st.routing["bin"] == "C"  # graded reject -> the red zone
     assert st.qc["grade"] == "reject"
 
 
@@ -466,7 +466,7 @@ def test_the_mock_uses_the_real_calibrated_zone_rectangles():
     assert x0 <= px <= x1 and y0 <= py <= y1  # verdict computed on the surveyed rectangle
 
 
-# --------------------------------------------------- run_order → events bridge
+# --------------------------------------------------- run_order -> events bridge
 #: Verbatim stdout of `python -m src.agent_service.run_order --verify --verify-fail 1`,
 #: trimmed to the lines that carry meaning. Nothing here imports run_order.
 RUN_ORDER_STDOUT = """\
@@ -511,8 +511,8 @@ def test_a_real_run_is_shown_COMMANDED_and_never_VERIFIED():
     st, _ = _translate(RUN_ORDER_STDOUT)
     assert [m["state"] for m in st.motion_panel()] == ["commanded", "commanded"]
     assert not any(m["confirmed"] for m in st.motion_panel())
-    assert st.stages["PICK"].status == "done"  # the STAGE finished …
-    assert st.stages["PICK"].motion["tone"] == "warn"  # … but the MOVE is unconfirmed
+    assert st.stages["PICK"].status == "done"  # the STAGE finished ...
+    assert st.stages["PICK"].motion["tone"] == "warn"  # ... but the MOVE is unconfirmed
 
 
 def test_the_bridge_marks_detect_and_locate_skipped_without_a_perceived_point():
@@ -627,7 +627,7 @@ def test_tail_lines_follows_a_growing_file(tmp_path):
 # ------------------------------------------------------------------- HTTP surface
 @pytest.fixture()
 def server():
-    """A real dashboard on a real socket — the demo is served, so test it served."""
+    """A real dashboard on a real socket: the demo is served, so test it served."""
     app = DashboardApp(platform=PlatformLink(runtime="MOCK", enabled=False))
     httpd = make_server(app, host="127.0.0.1", port=0, quiet=True)
     serve_in_thread(httpd)
@@ -760,7 +760,7 @@ def test_auto_view_recentres_on_extra_points():
     rects = F.load_zone_rects()
     plain = F.auto_view(rects, (1920, 1080))
     with_props = F.auto_view(rects, (1920, 1080), extra=list(F.PROP_HOME.values()))
-    assert with_props.x < plain.x  # props lie left of the zones → the window shifts left
+    assert with_props.x < plain.x  # props lie left of the zones -> the window shifts left
     assert (with_props.w, with_props.h) == (plain.w, plain.h)
 
 
@@ -788,7 +788,7 @@ def test_parse_events_accepts_the_three_producer_shapes():
 # ---------------------------------------------------------------- the launcher
 @pytest.fixture(scope="module")
 def launcher():
-    """``tools/dashboard.py`` is a script, not a package — load it by path."""
+    """``tools/dashboard.py`` is a script, not a package, so load it by path."""
     import importlib.util
     from pathlib import Path
 
@@ -804,7 +804,7 @@ def test_the_bare_command_is_a_mock_run(launcher):
     args = launcher.resolve_source(launcher.build_parser().parse_args([]))
     assert args.mock is True
     assert args.follow is None
-    assert args.runtime is None  # → MOCK, so nothing is ever sent
+    assert args.runtime is None  # -> MOCK, so nothing is ever sent
     assert args.mode == "order"
     assert args.outcome == "auto"
 

@@ -1,18 +1,17 @@
-"""HTTP webhook receiver — the **"order-driven"** half of "Order-Driven Zero-Shot Picking Cell".
+"""HTTP webhook receiver: the **"order-driven"** half of "Order-Driven Zero-Shot Picking Cell".
 
 Until now orders only came from the in-process mock list (``wms_mock.OrderSource``), so the
 project name was only half true: nothing outside the process could *trigger* the agent.
-This module closes that gap — a mock WMS ``POST``s an order and the arm moves
-(docs/demo-scenario.md §"How it drives the agentic loop", step 1):
+This module closes that gap. A mock WMS ``POST``s an order and the arm moves:
 
-    curl -X POST /orders {"order_id","item","bin"} → Order.from_dict → fulfill_order → JSON
+    curl -X POST /orders {"order_id","item","bin"} -> Order.from_dict -> fulfill_order -> JSON
 
 **Standard library only** (``http.server`` + ``json``): no FastAPI/uvicorn/flask in the
-venv and adding a web stack days before submission is unacceptable risk (CLAUDE.md rule 6
-— bias to shipping, log the debt).
+venv and adding a web stack days before submission is unacceptable risk (bias to
+shipping, log the debt).
 TODO(post-cohort): re-implement as a FastAPI app (pydantic request model, async, OpenAPI
 schema, TestClient) and mount it behind the Cyberwave webhook workflow; the seam here is
-already the right one — ``make_handler(runner)`` — so only the transport changes.
+already the right one (``make_handler(runner)``), so only the transport changes.
 
 Design notes:
 - The handler is **injected with a runner callable** ``(Order) -> Fulfillment`` and never
@@ -25,12 +24,12 @@ Design notes:
   and never a dead server.
 
 Routes:
-    POST /orders   → 200 fulfilled · 409 well-formed but not fulfilled · 422 malformed
-                     · 413 body too large · 500 runner exploded
-    GET  /health   → 200 {"status": "ok", ...}
-    (other)        → 404 · wrong method on a known route → 405 + Allow
+    POST /orders   -> 200 fulfilled, 409 well-formed but not fulfilled, 422 malformed,
+                      413 body too large, 500 runner exploded
+    GET  /health   -> 200 {"status": "ok", ...}
+    (other)        -> 404, wrong method on a known route -> 405 + Allow
 
-SAFETY (CLAUDE.md rule 2): default is **dry-run** (no connection, no motion). ``--sim``
+SAFETY: default is **dry-run** (no connection, no motion). ``--sim``
 goes through ``control.sim_session``, which pins ``cw.affect("simulation")``; there is no
 live-hardware path here.
 
@@ -59,7 +58,7 @@ from .loop import Fulfillment, fulfill_order
 from .poses import PICK_POSES, PLACE_POSES
 
 # Reused from the single-order CLI so the two entrypoints behave identically (no
-# duplicated offline stubs — CLAUDE.md rule 5). Private-but-sibling on purpose.
+# duplicated offline stubs). Private-but-sibling on purpose.
 from .run_order import _NullRobot, _live_verifier, _stub_verifier
 
 SERVICE = "order-webhook"
@@ -67,13 +66,13 @@ SERVICE = "order-webhook"
 #: ``(Order) -> Fulfillment``-ish. Duck-typed: anything with ``status``/``stages`` works.
 Runner = Callable[[Order], Any]
 
-#: Refuse absurd bodies outright — an order is ~80 bytes; this is a mock WMS, not an API.
+#: Refuse oversized bodies outright: an order is ~80 bytes; this is a mock WMS, not an API.
 MAX_BODY_BYTES = 64 * 1024
 
 ROUTES: dict[str, list[str]] = {"/orders": ["POST"], "/health": ["GET"]}
 
 # HTTP code for "your order was fine, the robot could not fulfil it". Documented choice:
-# 409 Conflict (the request conflicts with the state of the cell — item missing, placement
+# 409 Conflict (the request conflicts with the state of the cell: item missing, placement
 # unverified) rather than 200-with-failed-status, so `curl -f` / the demo script can tell
 # success from failure without parsing the body. The body still carries the full outcome.
 FAILED_STATUS = HTTPStatus.CONFLICT
@@ -106,14 +105,14 @@ def make_handler(
 
         # --- routing ----------------------------------------------------
 
-        def do_GET(self) -> None:  # noqa: N802 — stdlib naming
+        def do_GET(self) -> None:  # noqa: N802, stdlib naming
             path = self._path()
             if path == "/health":
                 self._json(HTTPStatus.OK, {"status": "ok", "service": SERVICE, "routes": ROUTES})
             else:
                 self._reject_route(path, "GET")
 
-        def do_POST(self) -> None:  # noqa: N802 — stdlib naming
+        def do_POST(self) -> None:  # noqa: N802, stdlib naming
             # Always drain the body first: an undrained request breaks HTTP/1.1 keep-alive.
             raw = self._read_body()
             if raw is None:
@@ -145,12 +144,12 @@ def make_handler(
                 return
             order_id = str(data.get("order_id") or "").strip() or None
 
-            # One arm ⇒ one order at a time. Serialize fulfilment; reply outside the lock.
+            # One arm means one order at a time. Serialize fulfilment; reply outside the lock.
             with run_lock:
                 self._log(f"▶ {order_id or '(no id)'}: {order.item!r} → bin {order.bin!r}")
                 try:
                     result = runner(order)
-                except Exception as e:  # noqa: BLE001 — a broken runner must not kill the server
+                except Exception as e:  # noqa: BLE001, a broken runner must not kill the server
                     self._log(f"‼ runner error: {type(e).__name__}: {e}")
                     self._error(
                         HTTPStatus.INTERNAL_SERVER_ERROR,
@@ -224,7 +223,7 @@ def make_handler(
         def _log(self, message: str) -> None:
             print(f"[order_api] {message}", flush=True)
 
-        def log_message(self, fmt: str, *args: Any) -> None:  # noqa: ANN401 — stdlib signature
+        def log_message(self, fmt: str, *args: Any) -> None:  # noqa: ANN401, stdlib signature
             self._log(fmt % args)
 
     return OrderHandler
@@ -260,7 +259,7 @@ def make_runner(
 
 
 def demo_curl(host: str, port: int) -> str:
-    """The exact command to paste in the demo — built from an item/bin that really works."""
+    """The exact command to paste in the demo, built from an item/bin that really works."""
     item = "red marker" if "red marker" in PICK_POSES else sorted(PICK_POSES)[0]
     bin_ = "A" if "A" in PLACE_POSES else sorted(PLACE_POSES)[0]
     body = json.dumps({"order_id": "SO-1042", "item": item, "bin": bin_})

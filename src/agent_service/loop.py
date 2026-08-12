@@ -1,31 +1,31 @@
-"""The order→pick→place→**verify**→alert loop (the closed agentic loop).
+"""The order -> pick -> place -> **verify** -> alert loop (the closed agentic loop).
 
 ``fulfill_order`` is the whole agent: take a validated :class:`Order`, look up a pick
 pose for the item + place pose for the bin (poses.py), drive both moves through
-:class:`control.MotionExecutor`, then — if a verifier is supplied — ask perception
+:class:`control.MotionExecutor`, then (if a verifier is supplied) ask perception
 whether the item actually landed in the bin and act on the answer:
 
-    pick → place → verify ─ ok ──→ "fulfilled" alert (info)
-                          └ not ok → retry pick+place ONCE → verify again
-                                     └ still not ok → status="failed" + ERROR alert
+    pick -> place -> verify -- ok --> "fulfilled" alert (info)
+                            +- not ok -> retry pick+place ONCE -> verify again
+                                          +- still not ok -> status="failed" + ERROR alert
 
-That feedback edge is the project thesis (decisions.md D9, docs/demo-scenario.md step 5)
-— it's what makes this an agent rather than an open-loop replay.
+That feedback edge is the project thesis. It's what makes this an agent rather than an
+open-loop replay.
 
 Verification is **opt-in and injected**: ``verify`` is any callable ``(order) -> result``
 with an ``ok`` flag (perception.verify.VerifyResult satisfies it). This module therefore
-imports NO network/camera code — with ``verify=None`` the loop behaves exactly like the
+imports NO network/camera code. With ``verify=None`` the loop behaves exactly like the
 walking skeleton it grew from, which keeps the perception-free entrypoints/tests valid.
 
 **Where the pick comes from is injected the same way**: ``resolve_pick`` is any callable
-``(order) -> poses.PickChoice``. ``None`` ⇒ the hardcoded pose table, i.e. today's exact
+``(order) -> poses.PickChoice``; ``None`` is the hardcoded pose table, i.e. today's exact
 behaviour; ``run_order --perceive`` passes a resolver that asks perception where the item
-really is (VLM → homography → IK) and *falls back to the hardcoded pose with a warning*
+really is (VLM -> homography -> IK) and *falls back to the hardcoded pose with a warning*
 when the calibration or the detection isn't there. Injection is what keeps this module
 camera-free and lets the degradation policy live in one obvious place (run_order).
 
 Pure + duck-typed: works with control.MotionExecutor's ``dry_run`` and any robot
-exposing ``joints.set`` / ``alerts.create`` — so it unit-tests with a fake robot.
+exposing ``joints.set`` / ``alerts.create``, so it unit-tests with a fake robot.
 """
 
 from __future__ import annotations
@@ -53,7 +53,7 @@ class VerifyOutcome(Protocol):
 # ``functools.partial(verify_placement, client, ...)`` all work without a base class.
 Verifier = Callable[[Order], Any]
 
-# ``resolve_pick(order) -> PickChoice`` (a bare MotionPlan is accepted too — see
+# ``resolve_pick(order) -> PickChoice`` (a bare MotionPlan is accepted too, see
 # ``_as_choice``). Its contract: it must NOT raise for a recoverable perception problem;
 # degrading to the hardcoded pose is the resolver's job, not the loop's.
 PickResolver = Callable[[Order], Any]
@@ -70,7 +70,7 @@ class Fulfillment:
     stages: list[str] = field(default_factory=list)
     attempts: int = 0  # pick+place attempts actually executed
     verification: dict[str, Any] | None = None  # last verdict, JSON-safe (for logs/alerts)
-    pick_source: str = HARDCODED  # "hardcoded" | "perceived" — which pick path ran
+    pick_source: str = HARDCODED  # "hardcoded" | "perceived": which pick path ran
     pick_target_mm: tuple[float, float] | None = None  # perceived table coord, if any
 
     @property
@@ -92,7 +92,7 @@ def _verdict(verify: Verifier, order: Order) -> tuple[bool, str, dict[str, Any] 
     """
     try:
         result = verify(order)
-    except Exception as e:  # noqa: BLE001 — a broken verifier must not kill the run
+    except Exception as e:  # noqa: BLE001, a broken verifier must not kill the run
         return False, f"verification error: {type(e).__name__}: {e}", None
     ok = bool(getattr(result, "ok", False))
     reason = str(getattr(result, "reason", "") or ("verified" if ok else "not verified"))
@@ -101,7 +101,7 @@ def _verdict(verify: Verifier, order: Order) -> tuple[bool, str, dict[str, Any] 
     return ok, reason, payload
 
 
-def _as_choice(resolved: Any) -> PickChoice:  # noqa: ANN401 — duck-typed on purpose
+def _as_choice(resolved: Any) -> PickChoice:  # noqa: ANN401, duck-typed on purpose
     """Normalize a resolver's answer to a :class:`PickChoice` (bare plans allowed)."""
     return resolved if isinstance(resolved, PickChoice) else PickChoice(resolved)
 
@@ -116,7 +116,7 @@ def fulfill_order(
     resolve_pick: PickResolver | None = None,
     max_attempts: int = MAX_ATTEMPTS,
 ) -> Fulfillment:
-    """Run one order end-to-end: pick → place → (verify) → alert.
+    """Run one order end-to-end: pick -> place -> (verify) -> alert.
 
     ``executor`` carries its own dry-run/sim setting (so motion is controlled there).
     ``robot`` is passed to the alert stub for ``alerts.create``; pass ``None`` (or set
@@ -128,7 +128,7 @@ def fulfill_order(
     Failed verification retries pick+place up to ``max_attempts`` times, then returns
     ``status="failed"`` and dispatches an ERROR alert.
 
-    ``resolve_pick`` decides *where* to pick: ``(order) -> PickChoice``. ``None`` ⇒ the
+    ``resolve_pick`` decides *where* to pick: ``(order) -> PickChoice``. ``None`` is the
     hardcoded pose table (unchanged default). The chosen path is recorded on the result
     as ``pick_source`` / ``pick_target_mm``.
 
@@ -138,7 +138,7 @@ def fulfill_order(
     result = Fulfillment(order=order, status="fulfilled")
     try:
         print(f"▶ order: pick {order.item!r} → bin {order.bin!r}")
-        # Resolve the pick target BEFORE any motion (so does place) — a planning error
+        # Resolve the pick target BEFORE any motion (so does place). A planning error
         # must never leave the arm half-way through an order.
         choice = _as_choice(resolve_pick(order)) if resolve_pick else pick_choice(order.item)
         pick = choice.plan
@@ -147,7 +147,7 @@ def fulfill_order(
         result.pick_target_mm = choice.table_mm
 
         attempts = 1 if verify is None else max(1, max_attempts)
-        verified = verify is None  # no verifier ⇒ nothing to prove
+        verified = verify is None  # no verifier means nothing to prove
         reason = ""
 
         for attempt in range(1, attempts + 1):
@@ -182,7 +182,7 @@ def fulfill_order(
         result.alert = send_alert(robot, build_fulfilled_alert(order), dry_run=dry_run_alert)
         result.stages.append("alerted")
         print(f"✅ fulfilled: {order.item} → bin {order.bin}\n")
-    except Exception as e:  # noqa: BLE001 — surface as a failed outcome, don't crash the batch
+    except Exception as e:  # noqa: BLE001, surface as a failed outcome, don't crash the batch
         result.status = "failed"
         result.error = f"{type(e).__name__}: {e}"
         print(f"❌ failed: {order.item} → bin {order.bin}  ({result.error})\n")

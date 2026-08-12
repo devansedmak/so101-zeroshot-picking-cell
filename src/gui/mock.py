@@ -27,12 +27,12 @@ from . import frames as F
 from .events import DEFAULT_TOLERANCE_DEG, ev, motion_event, motion_summary, stage_event
 from .modes import DEFAULT_MODE, QCVerdict, check_mode, names_bin, needs_qc, route
 
-#: How a run ends. ``ok`` first try · ``retry`` fails once then succeeds · ``fail`` never verifies.
+#: How a run ends. ``ok`` first try; ``retry`` fails once then succeeds; ``fail`` never verifies.
 OUTCOMES: tuple[str, ...] = ("ok", "retry", "fail")
 DEFAULT_OUTCOME = "ok"
 
 #: Driver-only: rotate through the three endings so an unattended loop tells the whole
-#: story (clean run → mismatch + retry → ghost arm + ERROR alert).
+#: story (clean run -> mismatch + retry -> ghost arm + ERROR alert).
 AUTO_OUTCOME = "auto"
 OUTCOME_ROTATION: tuple[str, ...] = ("ok", "retry", "fail")
 
@@ -42,11 +42,11 @@ HOLD_SECONDS = 6.0
 # ------------------------------------------------------------------ motion honesty
 # What the encoders say about each commanded move, per canned ending. This is the one
 # part of the mock that is *not* decoration: MotionExecutor reports success with no servo
-# acknowledgement (progress.md 2026-08-11, "Ghost arm"), so the dashboard has to be able
-# to draw COMMANDED / VERIFIED / MISMATCH / UNVERIFIED differently — and the only way to
+# acknowledgement (the "ghost arm" failure), so the dashboard has to be able
+# to draw COMMANDED / VERIFIED / MISMATCH / UNVERIFIED differently, and the only way to
 # prove it does is to script a run through each of them.
 #
-#   ("STAGE", attempt) → (state, {joint: error_deg}, detail)
+#   ("STAGE", attempt) -> (state, {joint: error_deg}, detail)
 MOTION_PLAN: dict[str, dict[tuple[str, int], tuple[str, dict[str, float], str]]] = {
     "ok": {
         ("PICK", 1): ("verified", {}, "6/6 joints read back within ±5.0°"),
@@ -67,7 +67,7 @@ MOTION_PLAN: dict[str, dict[tuple[str, int], tuple[str, dict[str, float], str]]]
         ("PLACE", 1): (
             "unverified",
             {},
-            "no joint telemetry — cannot tell whether the arm moved (runbook: Ghost arm)",
+            "no joint telemetry — cannot tell whether the arm moved",
         ),
         ("PICK", 2): ("unverified", {}, "no joint telemetry — driver lost its serial binding"),
         ("PLACE", 2): ("unverified", {}, "no joint telemetry — NOT a success, NOT green"),
@@ -126,7 +126,7 @@ def _homography() -> Any:
         from src.perception.homography import Homography
 
         return Homography.load(Path("hardware/config/homography.json"))
-    except Exception:  # noqa: BLE001 — a missing/odd calibration must not break the demo
+    except Exception:  # noqa: BLE001, a missing/odd calibration must not break the demo
         return None
 
 
@@ -141,7 +141,7 @@ def _table_mm(homography: Any, px: float, py: float) -> list[float] | None:
 
 
 def commanded(stage: str, attempt: int = 1) -> dict[str, Any]:
-    """"Sent, unconfirmed" — what every move looks like the instant MQTT accepts it."""
+    """"Sent, unconfirmed": what every move looks like the instant MQTT accepts it."""
     return motion_event(stage, "commanded", detail=COMMANDED_DETAIL, attempt=attempt)
 
 
@@ -168,7 +168,7 @@ def build_script(
     homography: Any = None,
     speed: float = 1.0,
 ) -> list[Beat]:
-    """Build the full beat list for one canned run. Pure — no threads, no sleeping."""
+    """Build the full beat list for one canned run. Pure: no threads, no sleeping."""
     m = check_mode(mode)
     out = outcome if outcome in OUTCOMES else DEFAULT_OUTCOME
     sc = scenario or SCENARIOS[m][0]
@@ -306,7 +306,7 @@ def build_script(
             )
         )
 
-    # ---------------------------------------------------------------- PLACE → VERIFY
+    # ---------------------------------------------------------------- PLACE -> VERIFY
     first_ok = out == "ok"
     first_point = good_point if first_ok else miss_point
     script.append(
@@ -430,7 +430,7 @@ def build_script(
 
 
 def _motion_alert(outcome: str, item: str, bin_label: str) -> dict[str, Any] | None:
-    """An alert for a move we could not confirm — the honest half of "plan complete".
+    """An alert for a move we could not confirm: the honest half of "plan complete".
 
     Silence here would be the exact failure mode of the 2026-08-11 session: a run that
     reports success while nothing in the cell has proved the arm moved.
@@ -481,7 +481,7 @@ def _verify_beats(
     ok: bool,
     attempt: int,
 ) -> list[Beat]:
-    """The verification verdict — computed by the same point-in-rectangle test as perception."""
+    """The verification verdict, computed by the same point-in-rectangle test as perception."""
     inside = _inside(rect, point) if rect else ok
     reason = (
         f"{sc.item!r} verified inside zone {bin_label} at px=({point[0]:.0f}, {point[1]:.0f})"
@@ -564,7 +564,7 @@ class MockDriver:
             self._thread.join(timeout=timeout)
 
     def configure(self, *, mode: str | None = None, outcome: str | None = None) -> None:
-        """Switch mode/outcome from the UI — takes effect on the next (immediate) run."""
+        """Switch mode/outcome from the UI. Takes effect on the next (immediate) run."""
         with self._lock:
             if mode:
                 self.mode = check_mode(mode)
